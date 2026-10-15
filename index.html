@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#11151e" />
+    <title>最終審判庁 — 人生の行き先を決める</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f3efe6;
+        --muted: #a8a8ae;
+        --line: rgba(239, 230, 211, 0.14);
+        --panel: rgba(25, 29, 39, 0.88);
+        --gold: #d8bd82;
+        --hell: #e57a68;
+        --heaven: #a8c7de;
+        font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(ellipse at 50% -20%, rgba(89, 92, 111, 0.32), transparent 55%),
+          radial-gradient(ellipse at 0% 100%, rgba(97, 40, 44, 0.16), transparent 40%),
+          #11151e;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(100% - 40px, 1040px);
+        margin: 0 auto;
+        padding: 34px 0 48px;
+      }
+
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .seal {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--gold);
+        font-size: 12px;
+        letter-spacing: 0.16em;
+      }
+
+      .seal-mark {
+        display: grid;
+        width: 34px;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid rgba(216, 189, 130, 0.58);
+        border-radius: 50%;
+        font-size: 17px;
+      }
+
+      .office {
+        color: var(--muted);
+        font-family: system-ui, sans-serif;
+        font-size: 10px;
+        letter-spacing: 0.16em;
+      }
+
+      .intro {
+        padding: 50px 0 30px;
+        text-align: center;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--gold);
+        font-size: 11px;
+        letter-spacing: 0.28em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(29px, 5vw, 48px);
+        font-weight: 500;
+        letter-spacing: 0.12em;
+      }
+
+      .intro-copy {
+        margin: 15px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        letter-spacing: 0.06em;
+        line-height: 1.9;
+      }
+
+      .scoreboard {
+        display: grid;
+        grid-template-columns: 1fr minmax(130px, 1.2fr) 1fr;
+        align-items: center;
+        gap: 16px;
+        margin: 0 0 22px;
+        padding: 17px 24px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: rgba(18, 22, 30, 0.72);
+      }
+
+      .quota {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .quota:last-child {
+        justify-content: flex-end;
+        text-align: right;
+      }
+
+      .quota-icon {
+        font-size: 21px;
+      }
+
+      .quota-label {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+      }
+
+      .quota-count {
+        display: block;
+        margin-top: 2px;
+        font-family: system-ui, sans-serif;
+        font-size: 21px;
+        font-weight: 500;
+      }
+
+      .quota-count small {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+      }
+
+      .quota-hell .quota-icon,
+      .quota-hell .quota-count {
+        color: var(--hell);
+      }
+
+      .quota-heaven .quota-icon,
+      .quota-heaven .quota-count {
+        color: var(--heaven);
+      }
+
+      .progress-wrap {
+        text-align: center;
+      }
+
+      .progress-text {
+        display: block;
+        margin-bottom: 9px;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+      }
+
+      .progress-track {
+        height: 3px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .progress-fill {
+        width: 0;
+        height: 100%;
+        background: linear-gradient(90deg, var(--hell), var(--gold), var(--heaven));
+        transition: width 300ms ease;
+      }
+
+      .case-card {
+        position: relative;
+        overflow: hidden;
+        padding: clamp(24px, 5vw, 48px);
+        border: 1px solid rgba(239, 230, 211, 0.19);
+        border-radius: 4px;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent 42%),
+          var(--panel);
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+      }
+
+      .case-card::before {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 3px;
+        height: 100%;
+        background: linear-gradient(var(--gold), transparent 80%);
+        content: "";
+      }
+
+      .case-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding-bottom: 21px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .case-label {
+        color: var(--gold);
+        font-size: 11px;
+        letter-spacing: 0.18em;
+      }
+
+      .case-number {
+        color: var(--muted);
+        font-family: system-ui, sans-serif;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+      }
+
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 28px 0 22px;
+      }
+
+      .portrait {
+        display: grid;
+        flex: 0 0 68px;
+        width: 68px;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid rgba(216, 189, 130, 0.4);
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(216, 189, 130, 0.13), transparent 72%);
+        color: var(--gold);
+        font-size: 27px;
+      }
+
+      .person-name {
+        margin: 0;
+        font-size: clamp(24px, 4vw, 31px);
+        font-weight: 500;
+        letter-spacing: 0.08em;
+      }
+
+      .person-meta {
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+      }
+
+      .resume {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 30px;
+        border-top: 1px solid var(--line);
+      }
+
+      .resume-item {
+        padding: 17px 0 15px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .resume-item.full {
+        grid-column: 1 / -1;
+      }
+
+      .resume-label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--gold);
+        font-size: 10px;
+        letter-spacing: 0.18em;
+      }
+
+      .resume-value {
+        margin: 0;
+        color: #e1ded7;
+        font-size: 14px;
+        line-height: 1.85;
+      }
+
+      .verdict-hint {
+        margin: 23px 0 14px;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-align: center;
+      }
+
+      .verdicts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .verdict-button {
+        min-height: 62px;
+        border: 1px solid;
+        border-radius: 3px;
+        background: transparent;
+        cursor: pointer;
+        font-size: 15px;
+        letter-spacing: 0.1em;
+        transition: background 160ms ease, transform 160ms ease, opacity 160ms ease;
+      }
+
+      .verdict-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+      }
+
+      .verdict-button:focus-visible,
+      .restart-button:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 3px;
+      }
+
+      .verdict-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.35;
+      }
+
+      .send-hell {
+        border-color: rgba(229, 122, 104, 0.55);
+        color: var(--hell);
+      }
+
+      .send-hell:hover:not(:disabled) {
+        background: rgba(229, 122, 104, 0.1);
+      }
+
+      .send-heaven {
+        border-color: rgba(168, 199, 222, 0.55);
+        color: var(--heaven);
+      }
+
+      .send-heaven:hover:not(:disabled) {
+        background: rgba(168, 199, 222, 0.1);
+      }
+
+      .verdict-button span {
+        display: block;
+        margin-top: 4px;
+        font-family: system-ui, sans-serif;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        opacity: 0.72;
+      }
+
+      .footer-note {
+        margin: 17px 0 0;
+        color: #777983;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-align: center;
+      }
+
+      .result {
+        padding: 12px 0 0;
+        text-align: center;
+      }
+
+      .result-seal {
+        display: grid;
+        width: 70px;
+        aspect-ratio: 1;
+        margin: 0 auto 20px;
+        place-items: center;
+        border: 1px solid rgba(216, 189, 130, 0.55);
+        border-radius: 50%;
+        color: var(--gold);
+        font-size: 30px;
+      }
+
+      .result h2 {
+        margin: 0;
+        font-size: 29px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+      }
+
+      .result-copy {
+        margin: 12px 0 27px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.8;
+      }
+
+      .result-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        text-align: left;
+      }
+
+      .result-column {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+      }
+
+      .result-column h3 {
+        margin: 0 0 13px;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+      }
+
+      .result-column.hell h3 {
+        color: var(--hell);
+      }
+
+      .result-column.heaven h3 {
+        color: var(--heaven);
+      }
+
+      .result-column ul {
+        display: grid;
+        gap: 9px;
+        margin: 0;
+        padding: 0;
+        color: #dedbd4;
+        font-size: 12px;
+        list-style: none;
+      }
+
+      .restart-button {
+        margin-top: 25px;
+        padding: 12px 28px;
+        border: 1px solid rgba(216, 189, 130, 0.55);
+        border-radius: 3px;
+        background: transparent;
+        color: var(--gold);
+        cursor: pointer;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+      }
+
+      .restart-button:hover {
+        background: rgba(216, 189, 130, 0.09);
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          width: min(100% - 28px, 520px);
+          padding-top: 20px;
+        }
+
+        .office {
+          max-width: 110px;
+          text-align: right;
+        }
+
+        .intro {
+          padding: 38px 0 24px;
+        }
+
+        .intro-copy {
+          font-size: 12px;
+        }
+
+        .scoreboard {
+          grid-template-columns: 1fr 1fr;
+          gap: 15px 8px;
+          padding: 14px 16px;
+        }
+
+        .progress-wrap {
+          grid-column: 1 / -1;
+          grid-row: 1;
+        }
+
+        .quota:last-child {
+          justify-content: flex-end;
+        }
+
+        .identity {
+          gap: 14px;
+        }
+
+        .portrait {
+          flex-basis: 56px;
+          width: 56px;
+          font-size: 23px;
+        }
+
+        .resume {
+          grid-template-columns: 1fr;
+        }
+
+        .resume-item.full {
+          grid-column: auto;
+        }
+
+        .verdicts {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .verdict-button {
+          min-height: 56px;
+        }
+
+        .result-columns {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div class="seal"><span class="seal-mark" aria-hidden="true">⚖</span> 最終審判庁</div>
+        <div class="office">AFTERLIFE ADMISSIONS OFFICE</div>
+      </header>
+
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">あなたの判決が、行き先を決める</p>
+        <h1 id="page-title">その人生に、判決を。</h1>
+        <p class="intro-copy">10人の履歴書を読み、天国と地獄へ5人ずつ振り分けてください。<br />情状酌量は、あなたの心ひとつ。</p>
+      </section>
+
+      <section class="scoreboard" aria-label="判決ノルマ">
+        <div class="quota quota-hell">
+          <span class="quota-icon" aria-hidden="true">▼</span>
+          <div><span class="quota-label">地獄行き</span><span class="quota-count"><span id="hell-count">0</span><small> / 5人</small></span></div>
+        </div>
+        <div class="progress-wrap">
+          <span class="progress-text" id="progress-text" aria-live="polite">審判 1 / 10</span>
+          <div class="progress-track" role="progressbar" aria-label="審判の進行状況" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+        </div>
+        <div class="quota quota-heaven">
+          <div><span class="quota-label">天国行き</span><span class="quota-count"><span id="heaven-count">0</span><small> / 5人</small></span></div>
+          <span class="quota-icon" aria-hidden="true">▲</span>
+        </div>
+      </section>
+
+      <section class="case-card" id="game-panel" aria-live="polite" aria-label="審判対象">
+        <div class="case-top">
+          <span class="case-label">審判対象者 — 履歴書</span>
+          <span class="case-number" id="case-number">FILE NO. 001</span>
+        </div>
+        <div id="candidate-view">
+          <div class="identity">
+            <div class="portrait" id="portrait" aria-hidden="true"></div>
+            <div>
+              <h2 class="person-name" id="person-name"></h2>
+              <p class="person-meta" id="person-meta"></p>
+            </div>
+          </div>
+          <div class="resume">
+            <div class="resume-item">
+              <span class="resume-label">生前の職業</span>
+              <p class="resume-value" id="occupation"></p>
+            </div>
+            <div class="resume-item">
+              <span class="resume-label">特記事項</span>
+              <p class="resume-value" id="record"></p>
+            </div>
+            <div class="resume-item full">
+              <span class="resume-label">本人の弁</span>
+              <p class="resume-value" id="statement"></p>
+            </div>
+          </div>
+          <p class="verdict-hint" id="verdict-hint">この人物の行き先を決定してください</p>
+          <div class="verdicts">
+            <button class="verdict-button send-hell" id="hell-button" type="button">地獄へ送る<span>ノルマ残り <b id="hell-remaining">5</b> 人</span></button>
+            <button class="verdict-button send-heaven" id="heaven-button" type="button">天国へ送る<span>ノルマ残り <b id="heaven-remaining">5</b> 人</span></button>
+          </div>
+        </div>
+        <div class="result" id="result-view" hidden>
+          <div class="result-seal" aria-hidden="true">判</div>
+          <h2>審判、完了。</h2>
+          <p class="result-copy">10人全員の行き先が決まりました。<br />あなたが下した判決を、ここに記録します。</p>
+          <div class="result-columns">
+            <section class="result-column hell">
+              <h3>▼ 地獄へ — 5人</h3>
+              <ul id="hell-list"></ul>
+            </section>
+            <section class="result-column heaven">
+              <h3>▲ 天国へ — 5人</h3>
+              <ul id="heaven-list"></ul>
+            </section>
+          </div>
+          <button class="restart-button" id="restart-button" type="button">もう一度、審判する</button>
+        </div>
+      </section>
+      <p class="footer-note">※ 登場人物と経歴はすべて架空です。判決を誤っても、やり直せます。</p>
+    </main>
+
+    <script>
+      const candidates = [
+        { name: "雨宮 透", age: 34, mark: "✦", occupation: "小さな町の図書館司書", record: "閉館後も毎晩、返却期限を過ぎた本に「おかえり」と声をかけていた。", statement: "本を返せない人にも、帰ってこられる場所が必要だと思ったんです。" },
+        { name: "黒田 鉄平", age: 52, mark: "♜", occupation: "老舗レストランの料理長", record: "食材の産地を偽装。だが、売れ残りは毎晩こっそり近所の炊き出しへ届けていた。", statement: "嘘をついたのは店を守るためです。あの人たちに食べさせたかったのも、本当です。" },
+        { name: "星野 みちる", age: 27, mark: "☾", occupation: "夜間救急の看護師", record: "患者の個人情報を一度だけ漏らした。告発した医療ミスを隠蔽されないためだった。", statement: "正しいことをするために、別の誰かを傷つけました。許されるとは思っていません。" },
+        { name: "鳴海 章", age: 68, mark: "⌂", occupation: "元・市役所職員", record: "40年間、書類の誤記を見逃さず差し戻した。そのせいで救済が遅れた人もいた。", statement: "規則を曲げれば、もっと困る人が出る。ずっとそう信じていました。" },
+        { name: "小鳥遊 ルカ", age: 19, mark: "♧", occupation: "高校生・動画配信者", record: "迷子の犬を探す配信が大反響。再生数のため、飼い主の泣き顔も公開した。", statement: "犬が見つかったのは本当です。でも、あの動画を消す気にはなれなくて。" },
+        { name: "三田村 千代", age: 81, mark: "❀", occupation: "町工場の元経理", record: "帳簿を改ざんし、倒産寸前の工場を救った。偽装に気づいた同僚は黙っていた。", statement: "守りたかったのは会社じゃない。みんなの、明日の仕事でした。" },
+        { name: "御影 奏", age: 41, mark: "♫", occupation: "ストリートピアニスト", record: "演奏で集まった寄付金の一部を私的に使った。後日、全額を返し、匿名で上乗せした。", statement: "返したから帳消し、とは思っていません。ただ、あの時はどうしても必要で。" },
+        { name: "早瀬 湊", age: 30, mark: "⚓", occupation: "海難救助のボランティア", record: "救助活動中、規則を破って一人を先に助けた。その判断で、別の救助が遅れた。", statement: "あの時、目の前にいた人を置いていくことはできませんでした。" },
+        { name: "白石 すみれ", age: 46, mark: "✿", occupation: "小学校の給食調理員", record: "アレルギー表示の確認を怠った。事故は起きなかったが、気づいた後も報告しなかった。", statement: "何も起きなかったから大丈夫だと、自分に言い聞かせてしまいました。" },
+        { name: "久遠 大地", age: 25, mark: "◇", occupation: "廃線跡を撮る写真家", record: "立入禁止区域に入り、そこで遭難した観光客を救助。救助費用は匿名で支払った。", statement: "入ってはいけない場所でした。でも、助けを呼ぶ声が聞こえたんです。" }
+      ];
+
+      let current = 0;
+      let judgments = [];
+
+      const elements = {
+        candidateView: document.getElementById("candidate-view"),
+        caseNumber: document.getElementById("case-number"),
+        portrait: document.getElementById("portrait"),
+        name: document.getElementById("person-name"),
+        meta: document.getElementById("person-meta"),
+        occupation: document.getElementById("occupation"),
+        record: document.getElementById("record"),
+        statement: document.getElementById("statement"),
+        hellCount: document.getElementById("hell-count"),
+        heavenCount: document.getElementById("heaven-count"),
+        hellRemaining: document.getElementById("hell-remaining"),
+        heavenRemaining: document.getElementById("heaven-remaining"),
+        hellButton: document.getElementById("hell-button"),
+        heavenButton: document.getElementById("heaven-button"),
+        progressText: document.getElementById("progress-text"),
+        progressBar: document.querySelector('[role="progressbar"]'),
+        progressFill: document.getElementById("progress-fill"),
+        verdictHint: document.getElementById("verdict-hint"),
+        candidateViewPanel: document.getElementById("candidate-view"),
+        resultView: document.getElementById("result-view")
+      };
+
+      function updateScoreboard() {
+        const hellCount = judgments.filter((judgment) => judgment.destination === "hell").length;
+        const heavenCount = judgments.length - hellCount;
+        const completed = judgments.length;
+
+        elements.hellCount.textContent = hellCount;
+        elements.heavenCount.textContent = heavenCount;
+        elements.hellRemaining.textContent = 5 - hellCount;
+        elements.heavenRemaining.textContent = 5 - heavenCount;
+        elements.hellButton.disabled = hellCount === 5;
+        elements.heavenButton.disabled = heavenCount === 5;
+        elements.progressText.textContent = completed === candidates.length
+          ? "審判完了"
+          : `審判 ${completed + 1} / ${candidates.length}`;
+        elements.progressBar.setAttribute("aria-valuenow", completed);
+        elements.progressFill.style.width = `${completed / candidates.length * 100}%`;
+
+        if (hellCount === 5) {
+          elements.verdictHint.textContent = "地獄のノルマ達成。残る判決は天国へ。";
+        } else if (heavenCount === 5) {
+          elements.verdictHint.textContent = "天国のノルマ達成。残る判決は地獄へ。";
+        } else {
+          elements.verdictHint.textContent = "この人物の行き先を決定してください";
+        }
+      }
+
+      function renderCandidate() {
+        const candidate = candidates[current];
+        elements.caseNumber.textContent = `FILE NO. ${String(current + 1).padStart(3, "0")}`;
+        elements.portrait.textContent = candidate.mark;
+        elements.name.textContent = candidate.name;
+        elements.meta.textContent = `${candidate.age}歳 ・ 生前の記録`;
+        elements.occupation.textContent = candidate.occupation;
+        elements.record.textContent = candidate.record;
+        elements.statement.textContent = `「${candidate.statement}」`;
+        updateScoreboard();
+      }
+
+      function showResults() {
+        elements.candidateViewPanel.hidden = true;
+        elements.resultView.hidden = false;
+        document.getElementById("hell-list").replaceChildren(
+          ...judgments.filter((item) => item.destination === "hell").map((item) => {
+            const listItem = document.createElement("li");
+            listItem.textContent = item.name;
+            return listItem;
+          })
+        );
+        document.getElementById("heaven-list").replaceChildren(
+          ...judgments.filter((item) => item.destination === "heaven").map((item) => {
+            const listItem = document.createElement("li");
+            listItem.textContent = item.name;
+            return listItem;
+          })
+        );
+        updateScoreboard();
+        document.getElementById("restart-button").focus();
+      }
+
+      function decide(destination) {
+        const assigned = judgments.filter((judgment) => judgment.destination === destination).length;
+        if (assigned >= 5 || current >= candidates.length) return;
+
+        judgments.push({ name: candidates[current].name, destination });
+        current += 1;
+        if (current === candidates.length) {
+          showResults();
+        } else {
+          renderCandidate();
+        }
+      }
+
+      function restart() {
+        current = 0;
+        judgments = [];
+        elements.resultView.hidden = true;
+        elements.candidateViewPanel.hidden = false;
+        renderCandidate();
+      }
+
+      elements.hellButton.addEventListener("click", () => decide("hell"));
+      elements.heavenButton.addEventListener("click", () => decide("heaven"));
+      document.getElementById("restart-button").addEventListener("click", restart);
+      renderCandidate();
+    </script>
+  </body>
+</html>
