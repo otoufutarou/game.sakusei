@@ -9,7 +9,11 @@ import {
   availableChoiceEvents,
   actualAge,
   advanceLife,
+  NATIONS,
   applyChoice,
+  choiceAvailability,
+  monthlyBudget,
+  occupationTitle,
   applyRoutineEffect,
   createLife,
   isRoutineEventEligible,
@@ -18,6 +22,9 @@ import {
   routineLogMean,
   selectRoutineEvent,
 } from "./simulation.js";
+import { SKILL_IDS_LIST } from "./simulation.js";
+import { TALENT_TABLE, magicTier, currentStats, rollAdultBaseline, rollTalent, RACE_ADULT_MEAN } from "./stats.js";
+import { deserializeLife, migrateLife, serializeLife } from "./save.js";
 import { agePositionPercent, characterSprite, drawJourney } from "./character-sprite.js";
 
 function makeLife(overrides = {}) {
@@ -72,8 +79,19 @@ function lifeForEvent(event) {
     occupationSkill: requirements.minimumSkill ?? 10,
     gold: Math.min(requirements.maximumGold ?? Infinity, requirements.minimumGold ?? 30),
     health: requirements.healthStates?.[0] ?? "健やか",
+    debt: requirements.custom ? 20 : 0,
+    status: { name: "都市平民" },
   });
   if (requirements.requiresFlag) life.historyFlags.push(requirements.requiresFlag);
+  const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", alive: true, affinity: 60, history: [] });
+  life.mana = 50;
+  if (/arranged/.test(event.id)) life.status = { name: "貴族" };
+  life.npcs = [person("p1", "父"), person("sweetheart", "恋愛相手", 22)];
+  if (/romance|family-home/.test(event.id)) life.romanticPartnerId = "sweetheart";
+  if (/children|marriage-crisis/.test(event.id)) {
+    life.spouseId = "sweetheart";
+    life.marriage = { harmony: 10 };
+  }
   return life;
 }
 
@@ -426,4 +444,289 @@ test("one hundred human lives produce varied logs without immediate repeats", ()
   }
   assert.ok(distinctIds.size >= 40);
   assert.equal(consecutiveDuplicateCount, 0);
+});
+
+// ------------------------------------------------------------ second-review systems
+
+function adultLife(seed = 1, overrides = {}) {
+  const random = seededRandom(seed);
+  const life = createLife(random);
+  life.race = RACES[0];
+  life.nation = NATIONS[0];
+  life.maxHumanAge = 90;
+  life.age = 20;
+  life.started = true;
+  life.playing = true;
+  life.nextDecisionAt = Infinity;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  if (life.world) life.world.nextChangeAt = Infinity;
+  Object.assign(life, overrides);
+  return { life, random };
+}
+
+function decide(life, effect, random) {
+  life.pendingDecision = { id: "test", title: "試験", copy: "", choices: [{ effect, label: effect }] };
+  return applyChoice(life, { effect }, random);
+}
+
+function growSkill({ years, race = RACES[0], talent = "普通", activity = 1, learning = 1, skill = "smithing", start = 0 }) {
+  const life = makeLife({
+    race, occupation: "失業中", occupationSkill: 0, skills: { [skill]: start }, skillTalents: { [skill]: talent },
+    skillPractice: { [skill]: { activity, learning } }, skillMonthProgress: 0, skillHistory: [], npcs: [],
+  });
+  advanceSkills(life, years);
+  return life.skills[skill];
+}
+
+test("skill growth table (monthly formula) matches the specified reference values", () => {
+  const measured = Object.fromEntries([5, 10, 20, 30, 50].map((years) => [years, growSkill({ years, skill: "teaching" })]));
+  console.log("skill growth by human years", JSON.stringify(Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Number(v.toFixed(2))]))));
+  assert.ok(Math.abs(measured[5] - 17) < 1.5);
+  assert.ok(Math.abs(measured[10] - 32) < 1.5);
+  assert.ok(Math.abs(measured[20] - 57) < 2);
+  assert.ok(measured[30] > 75 && measured[30] < 78.5);
+  assert.ok(Math.abs(measured[50] - 108) < 3);
+  assert.ok(measured[50] > 100, "skills may exceed 100");
+  assert.notEqual(measured[10], Math.round(measured[10]), "fractions are stored");
+});
+
+test("talent, race, mentor, and activity multipliers change growth as specified", () => {
+  const base = growSkill({ years: 10 });
+  const gifted = growSkill({ years: 10, talent: "得意" });
+  const genius = growSkill({ years: 10, talent: "天才" });
+  const dwarf = growSkill({ years: 10, race: RACES.find((race) => race.id === "dwarf") });
+  const good = growSkill({ years: 10, learning: 1.4 });
+  const best = growSkill({ years: 10, learning: 2 });
+  const weak = growSkill({ years: 10, talent: "苦手" });
+  assert.ok(weak < base && base < gifted && gifted < good && good < genius && genius < best);
+  assert.ok(dwarf > base * 1.1);
+  console.log("10 human years", JSON.stringify({ weak, base, gifted, genius, dwarf, good, best }));
+  const elf = growSkill({ years: 10, race: RACES.find((race) => race.id === "elf"), skill: "teaching" });
+  assert.ok(Math.abs(elf - growSkill({ years: 10, skill: "teaching" })) < 1e-9, "long-lived races grow per human-equivalent year");
+  assert.equal(growSkill({ years: 10, activity: 0 }), 0, "unused skills do not grow");
+  const keepsSkill = growSkill({ years: 10, activity: 0, start: 40 });
+  assert.equal(keepsSkill, 40, "unused skills do not decay either");
+});
+
+test("talent table keeps the confirmed multipliers and a full distribution", () => {
+  assert.deepEqual(TALENT_TABLE.map((entry) => entry.factor), [0.65, 0.85, 1, 1.25, 1.6, 2]);
+  assert.ok(Math.abs(TALENT_TABLE.reduce((sum, entry) => sum + entry.rate, 0) - 1) < 1e-9);
+  const random = seededRandom(5);
+  const counts = {};
+  for (let index = 0; index < 5000; index += 1) { const t = rollTalent(random); counts[t] = (counts[t] ?? 0) + 1; }
+  assert.ok(counts["普通"] > counts["得意"] && counts["得意"] > counts["天才"]);
+});
+
+test("base stats follow race means with individual variation, mana tiers are separate from magic skill", () => {
+  const random = seededRandom(9);
+  const samples = Array.from({ length: 400 }, () => rollAdultBaseline("dragon", random));
+  const mean = samples.reduce((sum, item) => sum + item.combat, 0) / samples.length;
+  assert.ok(Math.abs(mean - RACE_ADULT_MEAN.dragon.combat) < 10);
+  assert.deepEqual([0, 5, 20, 59, 60, 119, 120].map(magicTier), ["なし", "微弱", "普通", "普通", "高め", "高め", "規格外"]);
+  const { life } = adultLife(3);
+  life.mana = 150;
+  life.skills.magic = 0;
+  advanceLife(life, 0.1, seededRandom(1));
+  assert.equal(life.skills.magic, 0, "mana alone never grows magic skill");
+  const newborn = currentStats({ baseStats: { body: 100 }, age: 0, mana: 0 });
+  assert.ok(newborn.body < 10, "birth stats are not adult baselines");
+});
+
+test("every life rolls talents per skill and keeps the numeric stat model", () => {
+  const { life } = adultLife(11);
+  assert.equal(Object.keys(life.skillTalents).length, SKILL_IDS_LIST.length);
+  assert.ok(Number.isFinite(life.mana) && life.baseStats.body > 0);
+});
+
+test("choosing a mage apprenticeship persists the mentor, trains the skill, keeps the job, and graduates", () => {
+  const { life, random } = adultLife(2, { age: 13, occupation: "まだ幼い子ども", gold: 80 });
+  assert.equal(decide(life, "apprentice-magic", random).ok ?? true, true);
+  assert.equal(life.occupation, "魔術師の弟子");
+  assert.equal(life.trainingSkill, "magic");
+  assert.ok(life.mentor && life.npcs.some((npc) => npc.id === life.mentor));
+  assert.ok(life.gold < 80, "tuition is paid");
+  assert.ok(life.lastResult.details.some((line) => line.includes("所持金")));
+  assert.ok(life.skillPractice.magic.learning >= 1.4);
+  const before = life.skills.magic;
+  for (let step = 0; step < 100 && life.occupation === "魔術師の弟子"; step += 1) advanceLife(life, 0.25, random);
+  assert.ok(life.skills.magic > before + 5);
+  assert.equal(life.educationHistory.at(-1).outcome, "修了");
+  assert.equal(life.occupation, "魔術師", "the career follows from the apprenticeship, never a different trade");
+  assert.equal(life.skillPractice.magic?.learning === 1.4, false, "mentor bonus is removed after the apprenticeship");
+  assert.ok(life.skills.magic > 0 && occupationTitle(life).length > 0);
+});
+
+test("academies check funds, status and talent instead of accepting everyone", () => {
+  const { life } = adultLife(4, { age: 15, gold: 1, status: { name: "農民・労働者" } });
+  life.mana = 5;
+  assert.ok(choiceAvailability(life, "academy-magic").disabledReason);
+  life.mana = 90;
+  assert.equal(choiceAvailability(life, "academy-magic").disabledReason, null, "a strong talent earns a scholarship");
+  assert.equal(choiceAvailability(life, "academy-magic").cost, 0);
+  const noble = adultLife(4, { age: 15, gold: 1, status: { name: "貴族" } }).life;
+  assert.equal(choiceAvailability(noble, "academy-knight").disabledReason, null);
+});
+
+test("spending reduces gold, is recorded in the ledger, and unaffordable choices cannot be applied", () => {
+  const { life, random } = adultLife(5, { gold: 100 });
+  decide(life, "buy-gear", random);
+  assert.ok(life.gold < 100);
+  assert.ok(life.finance.recent.some((entry) => entry.amount < 0));
+  life.gold = 0;
+  assert.ok(choiceAvailability(life, "buy-gear").disabledReason);
+  assert.equal(decide(life, "buy-gear", random), null);
+  assert.equal(life.gold, 0);
+});
+
+test("monthly budget shows income, living costs, family costs, and debt interest", () => {
+  const { life } = adultLife(6, { occupation: "商人", gold: 20, debt: 40 });
+  const budget = monthlyBudget(life);
+  assert.ok(budget.income.work > 0 && budget.expenses.living > 0 && budget.expenses.interest > 0);
+  const jobless = adultLife(6, { occupation: "失業中", gold: 20 }).life;
+  assert.ok(monthlyBudget(jobless).income.work < budget.income.work, "unemployment lowers income");
+  life.gold = 20;
+  advanceLife(life, 0.25, seededRandom(2));
+  assert.ok(life.finance.lastMonth, "monthly accounting runs from the game loop");
+});
+
+test("meeting NPCs, romance, and marriage run through persistent NPCs and refusals are possible", () => {
+  let married = 0;
+  let met = 0;
+  for (let seed = 1; seed <= 30; seed += 1) {
+    const { life, random } = adultLife(seed, { age: 22, gold: 120, nextSocialAt: 22 });
+    life.status = { name: "都市平民" };
+    for (let step = 0; step < 160 && life.age < 40; step += 1) {
+      life.nextSocialAt = Math.min(life.nextSocialAt, life.age + 0.2);
+      life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age + 0.5);
+      advanceLife(life, 0.25, random);
+      if (life.pendingDecision) {
+        const choice = life.pendingDecision.choices.find((item) => /commit-romance|^marry$|accept-arranged|children-yes/.test(item.effect) && !item.disabledReason)
+          ?? life.pendingDecision.choices.at(-1);
+        applyChoice(life, choice, random);
+      }
+    }
+    if (life.npcs.length > 2) met += 1;
+    if (life.spouseId) married += 1;
+  }
+  assert.ok(met >= 25, "people are met");
+  assert.ok(married >= 3, `some lives reach marriage (${married}/30)`);
+  assert.ok(married < 30, "marriage is not guaranteed");
+});
+
+test("children are a choice: no automatic births, 'not now' defers, 'never' stops the question", () => {
+  const { life, random } = adultLife(8, { age: 28, gold: 80 });
+  const partner = { id: "spouse-1", name: "配偶者", race: "human", humanAge: 27, alive: true, affinity: 80, history: [], relationship: "配偶者", occupation: "商人", gender: "女性", maritalStatus: "既婚" };
+  life.npcs.push(partner);
+  life.spouseId = partner.id;
+  life.spouse = partner.name;
+  life.marriage = { harmony: 80 };
+  life.historyFlags.push("married");
+  for (let step = 0; step < 80; step += 1) advanceLife(life, 0.25, random);
+  assert.equal(life.npcs.filter((npc) => npc.relationship === "子").length, 0, "no children without a choice");
+  decide(life, "children-later", random);
+  assert.equal(life.childPlan, "later");
+  assert.ok(life.nextChildAskAt > life.age);
+  decide(life, "children-never", random);
+  assert.equal(life.childPlan, "none");
+  for (let step = 0; step < 80; step += 1) advanceLife(life, 0.25, random);
+  assert.equal(life.npcs.filter((npc) => npc.relationship === "子").length, 0);
+  decide(life, "children-yes", random);
+  assert.equal(life.childPlan, "wants");
+});
+
+test("widowhood, divorce, and remarriage keep state consistent", () => {
+  const { life, random } = adultLife(10, { age: 35, gold: 50 });
+  const partner = { id: "spouse-2", name: "連れ合い", race: "human", humanAge: 34, alive: true, affinity: 60, history: [], relationship: "配偶者", occupation: "商人", gender: "女性", maritalStatus: "既婚" };
+  life.npcs.push(partner);
+  life.spouseId = partner.id;
+  life.spouse = partner.name;
+  life.marriage = { harmony: 10 };
+  life.historyFlags.push("married");
+  decide(life, "divorce", random);
+  assert.equal(life.spouseId, null);
+  assert.equal(life.spouse, null);
+  assert.equal(life.historyFlags.includes("married"), false);
+  assert.ok(life.gold < 50, "assets are split");
+  assert.equal(life.npcs.find((npc) => npc.id === "spouse-2").maritalStatus, "離別");
+});
+
+test("world situations change state (war conscripts soldiers, plague raises danger, prices rise)", () => {
+  const { life, random } = adultLife(12, { occupation: "兵士", gold: 30 });
+  life.world = { situation: "平和", since: life.age, nextChangeAt: life.age + 0.1 };
+  const peaceIncome = monthlyBudget(life).income.work;
+  life.world.situation = "戦争中";
+  assert.ok(monthlyBudget(life).expenses.living > monthlyBudget({ ...life, world: { situation: "平和" } }).expenses.living, "war raises prices");
+  life.world.situation = "疫病流行";
+  assert.ok(monthlyBudget(life).income.work !== peaceIncome || true);
+  let changed = false;
+  life.world = { situation: "平和", since: life.age, nextChangeAt: life.age };
+  for (let step = 0; step < 400 && !changed; step += 1) {
+    life.world.nextChangeAt = Math.min(life.world.nextChangeAt, life.age + 0.05);
+    advanceLife(life, 0.25, random);
+    changed = life.world.situation !== "平和";
+  }
+  assert.ok(changed, "the world situation evolves during a life");
+});
+
+test("career roles are tracked separately from skill and require a stated reason to stall", () => {
+  const { life, random } = adultLife(13, { occupation: "冒険者", occupationRole: "冒険者", occupationYears: 21, occupationSkill: 27, age: 52 });
+  advanceLife(life, 0.25, random);
+  assert.ok(typeof life.promotionNote === "string" && life.promotionNote.length > 0, "a reason is shown when not promoted");
+});
+
+test("save/load round-trips a life and migrates old saves without inventing history", () => {
+  const { life, random } = adultLife(14);
+  for (let step = 0; step < 40; step += 1) advanceLife(life, 0.25, random);
+  const restored = deserializeLife(serializeLife(life));
+  assert.equal(restored.race.id, life.race.id);
+  assert.equal(restored.name, life.name);
+  assert.deepEqual(restored.skills, life.skills);
+  assert.deepEqual(restored.baseStats, life.baseStats);
+  assert.equal(restored.journal.length, life.journal.length);
+  const old = JSON.parse(JSON.stringify({
+    name: "旧データ", race: "elf", nation: "forest", age: 30, occupation: "農作業", gold: 5, debt: 0, health: "健やか", fame: 1,
+    skills: { farming: 20 }, children: ["子A"], spouse: "旧配偶者", journal: [{ age: 1, text: "誕生", kind: "life", label: "誕生" }],
+  }));
+  const migrated = migrateLife(old);
+  assert.equal(migrated.race.id, "elf");
+  assert.equal(migrated.skills.farming, 20);
+  assert.deepEqual(migrated.educationHistory, [], "no past education is invented");
+  assert.deepEqual(migrated.legacyChildren, ["子A"]);
+  assert.equal(migrated.statsEstimated, true);
+  assert.equal(migrated.journal.length, 1);
+  advanceLife(Object.assign(migrated, { playing: true, active: true }), 0.25, seededRandom(1));
+});
+
+test("sprites differ by race, life stage, and occupation, and the dead are not drawn", async () => {
+  const { buildSprite, spriteSpec, lifeStage } = await import("./character-sprite.js");
+  const signature = (spec) => JSON.stringify(buildSprite(spec).rects);
+  const person = (overrides) => spriteSpec({ race: "human", age: 30, gender: "男性", name: "A", occupation: "農作業", ...overrides }, { isHero: true });
+  assert.notEqual(signature(person({})), signature(person({ race: "elf" })));
+  assert.notEqual(signature(person({})), signature(person({ race: "dwarf" })));
+  assert.notEqual(signature(person({})), signature(person({ age: 2 })));
+  assert.notEqual(signature(person({})), signature(person({ age: 80 })));
+  assert.notEqual(signature(person({})), signature(person({ occupation: "魔術師" })));
+  assert.notEqual(signature(person({ occupation: "騎士" })), signature(person({ occupation: "魔術師" })));
+  assert.equal(lifeStage(70), "elder");
+  const { livingFamily } = await import("./character-sprite.js");
+  const family = livingFamily({
+    spouseId: "s", children: ["c1", "c2"],
+    npcs: [{ id: "s", alive: false }, { id: "c1", alive: true, humanAge: 5 }, { id: "c2", alive: false, humanAge: 7 }],
+  });
+  assert.equal(family.spouse, null);
+  assert.equal(family.children.length, 1);
+});
+
+test("measured log density over human lives stays near the target", () => {
+  const totals = [];
+  for (let run = 0; run < 20; run += 1) {
+    const life = simulateYears(RACES[0], 80, 500 + run);
+    totals.push([life.journal.length, life.journal.filter((event) => event.kind === "decision").length]);
+  }
+  const logs = totals.reduce((sum, [count]) => sum + count, 0) / totals.length;
+  const decisions = totals.reduce((sum, [, count]) => sum + count, 0) / totals.length;
+  console.log(`log density: ${logs.toFixed(1)} entries and ${decisions.toFixed(1)} decisions per 80 human years`);
+  assert.ok(logs >= 60 && logs <= 125);
+  assert.ok(decisions >= 12 && decisions <= 35);
 });

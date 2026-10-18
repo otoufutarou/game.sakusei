@@ -1,62 +1,201 @@
-// Replace these 16×20 pixel maps and palette to swap the original placeholder art.
-const idle = [
-  "......HHHH......",
-  ".....HHHHHH.....",
-  ".....HSSSSH.....",
-  ".....SSEESS.....",
-  "......SSSS......",
-  ".......SS.......",
-  ".....CCCCCC.....",
-  "....CCCTTCCC....",
-  "....CCCCCCCC....",
-  "...CCCCCCCCCC...",
-  "...CCCCCCCCCC...",
-  "....CCCCCCTT....",
-  "....CCCCCCCC....",
-  "....CCCCCCCC....",
-  ".....PP..PP.....",
-  ".....PP..PP.....",
-  ".....PP..PP.....",
-  "....BB....BB....",
-  "....BB....BB....",
-  "....BBBBBBBB....",
-];
+// Procedural pixel people. A person is built on a small logical grid (about 20×34 for an adult,
+// roughly the 32×48 target) from parts chosen by race, life stage, gender, occupation and condition,
+// and is always drawn at an integer scale so the pixels stay crisp.
+export const characterSprite = { width: 20, height: 34, kind: "procedural" };
 
-const leftStep = [
-  ...idle.slice(0, 14),
-  "....PP..PP......",
-  "...PP....PP.....",
-  "...PP....PP.....",
-  "...BB.....BB....",
-  "..BB......BB....",
-  "..BBBB..BBBB....",
-];
-
-const rightStep = [
-  ...idle.slice(0, 14),
-  "......PP..PP....",
-  ".....PP....PP...",
-  ".....PP....PP...",
-  "....BB.....BB...",
-  ".....BB......BB.",
-  "....BBBB..BBBB..",
-];
-
-export const characterSprite = {
-  width: 16,
-  height: 20,
-  palette: {
-    H: "#34271f",
-    S: "#e2b98e",
-    E: "#382d27",
-    C: "#647d72",
-    T: "#d8b96f",
-    P: "#544334",
-    B: "#352b24",
-  },
-  idle,
-  walk: [leftStep, rightStep],
+export const SKIN = {
+  human: "#e2b98e", beastkin: "#d6a572", dwarf: "#d9a47c", demon: "#b58aa4",
+  elf: "#efd2b0", dragon: "#6f9a6a", vampire: "#ebddd6",
 };
+
+const OUTFITS = {
+  "兵士": { coat: "#657491", trim: "#c9ced6", hat: "helmet", prop: "spear" },
+  "騎士": { coat: "#a9b1bd", trim: "#a3342f", hat: "helmet", prop: "sword", cape: "#a3342f" },
+  "騎士学院生": { coat: "#7f93ad", trim: "#c9ced6", prop: "sword" },
+  "魔術師": { coat: "#5d4b8c", trim: "#d8b96f", hat: "wizard", prop: "staff" },
+  "魔術師の弟子": { coat: "#7a6aa8", trim: "#d8b96f", prop: "staff" },
+  "魔術学院生": { coat: "#6b5aa0", trim: "#e8e0c0", prop: "book" },
+  "農作業": { coat: "#8a7650", trim: "#6b5a3a", hat: "straw", prop: "hoe" },
+  "家業の手伝い": { coat: "#8a7650", trim: "#6b5a3a" },
+  "冒険者": { coat: "#87634c", trim: "#4a3a2c", prop: "sword", cape: "#5e4636" },
+  "教師": { coat: "#786984", trim: "#e8e0c0", prop: "book" },
+  "学者": { coat: "#4f5f78", trim: "#e8e0c0", prop: "book" },
+  "学術院生": { coat: "#5d7090", trim: "#e8e0c0", prop: "book" },
+  "商人": { coat: "#6f8a5a", trim: "#d8b96f", prop: "pouch" },
+  "鍛冶職人": { coat: "#6b5545", trim: "#2d2823", prop: "hammer" },
+  "工房主": { coat: "#6b5545", trim: "#d8b96f", prop: "hammer" },
+  "服飾店の見習い": { coat: "#8fb0c4", trim: "#e8d0d8" },
+  "職人見習い": { coat: "#9b8456", trim: "#5c4a30" },
+};
+
+export function lifeStage(humanAge) {
+  if (humanAge < 3) return "baby";
+  if (humanAge < 12) return "child";
+  if (humanAge < 18) return "teen";
+  return humanAge >= 65 ? "elder" : "adult";
+}
+
+const STAGE_SHAPE = {
+  baby: { height: 13, head: 7, body: 5, legs: 3 },
+  child: { height: 21, head: 8, body: 7, legs: 6 },
+  teen: { height: 28, head: 8, body: 10, legs: 10 },
+  adult: { height: 33, head: 8, body: 12, legs: 13 },
+  elder: { height: 31, head: 8, body: 12, legs: 11 },
+};
+
+function hashText(text) {
+  let value = 0;
+  for (const character of String(text ?? "")) value = (value * 31 + character.charCodeAt(0)) >>> 0;
+  return value;
+}
+
+// Everything the picture depends on, read from game state.
+export function spriteSpec(person, { isHero = false } = {}) {
+  const raceId = person.race?.id ?? person.race ?? "human";
+  const humanAge = person.age ?? person.humanAge ?? 20;
+  const stage = lifeStage(humanAge);
+  const occupation = isHero ? person.occupation : person.occupation;
+  const royal = isHero && ["王族", "貴族"].includes(person.status?.name);
+  const outfit = { ...(OUTFITS[occupation] ?? { coat: person.appearance?.coat ?? "#647d72", trim: "#d8b96f" }) };
+  if (royal && !OUTFITS[occupation]) Object.assign(outfit, { coat: "#7b2f4a", trim: "#e6c75a", hat: person.status.name === "王族" ? "crown" : "feather" });
+  else if (isHero && !OUTFITS[occupation] && person.appearance?.coat) outfit.coat = person.appearance.coat;
+  const gender = person.gender ?? "その他";
+  const hairStyle = gender === "女性" ? (hashText(person.name) % 2 ? "long" : "tied") : gender === "男性" ? "short" : (hashText(person.name) % 2 ? "short" : "medium");
+  const ill = ["療養中", "重病", "病気", "回復中"].includes(person.health);
+  const hair = stage === "elder" ? "#b9b4a8" : person.appearance?.hair ?? ["#34271f", "#5a3a28", "#8a5a30", "#c8a050", "#2a2a3a"][hashText(person.name) % 5];
+  return { raceId, stage, gender, hairStyle, hair, outfit, occupation, ill, skin: SKIN[raceId] ?? SKIN.human, royal };
+}
+
+// Returns pixel rectangles on the logical grid, origin at the top-left, feet on the last row.
+export function buildSprite(spec, frame = 0, walking = false) {
+  const shape = STAGE_SHAPE[spec.stage];
+  const rects = [];
+  const add = (x, y, w, h, color) => rects.push({ x, y, w, h, color });
+  const dwarf = spec.raceId === "dwarf";
+  const bodyW = spec.stage === "baby" ? 6 : dwarf ? 11 : spec.stage === "child" ? 7 : 9;
+  const centre = 10;
+  const heightBonus = spec.raceId === "elf" && spec.stage === "adult" ? 1 : 0;
+  const legH = dwarf ? Math.max(2, shape.legs - 4) : shape.legs + heightBonus;
+  const bodyH = shape.body;
+  const headH = shape.head;
+  const top = 34 - (headH + bodyH + legH);
+  const headY = top;
+  const bodyY = top + headH;
+  const legY = bodyY + bodyH;
+  const left = centre - Math.floor(bodyW / 2);
+  const headW = shape.head;
+  const headX = centre - Math.floor(headW / 2);
+  const skin = spec.ill ? "#cdbfb0" : spec.skin;
+  const { coat, trim } = spec.outfit;
+  const dark = "#352b24";
+
+  if (spec.outfit.cape && spec.stage !== "baby") add(left - 1, bodyY, bodyW + 2, bodyH + 2, spec.outfit.cape);
+  if (spec.raceId === "dragon") {
+    add(left - 4, bodyY, 4, bodyH - 2, "#4f7a55");
+    add(left + bodyW, bodyY, 4, bodyH - 2, "#4f7a55");
+  }
+  if (["beastkin", "demon", "dragon"].includes(spec.raceId)) add(left + bodyW, legY - 2, 3, 2, spec.raceId === "beastkin" ? spec.hair : skin);
+
+  const stepA = walking && frame % 2 === 0 ? 1 : 0;
+  const stepB = walking && frame % 2 === 1 ? 1 : 0;
+  const legW = Math.max(2, Math.floor(bodyW / 2) - 1);
+  add(left + 1 - stepA, legY, legW, legH, "#544334");
+  add(left + bodyW - 1 - legW + stepB, legY, legW, legH, "#544334");
+  add(left + 1 - stepA - 1, legY + legH - 1, legW + 1, 1, dark);
+  add(left + bodyW - 1 - legW + stepB, legY + legH - 1, legW + 1, 1, dark);
+
+  add(left, bodyY, bodyW, bodyH, coat);
+  if (spec.stage !== "baby") add(left + Math.floor(bodyW / 2) - 1, bodyY, 2, bodyH, trim);
+  add(left - 1, bodyY + 1, 1, Math.max(3, bodyH - 4), coat);
+  add(left + bodyW, bodyY + 1, 1, Math.max(3, bodyH - 4), coat);
+  add(left - 1, bodyY + bodyH - 3, 1, 1, skin);
+  add(left + bodyW, bodyY + bodyH - 3, 1, 1, skin);
+  if (spec.outfit.prop === "hammer" || spec.outfit.prop === "hoe") add(left + 2, bodyY + 4, bodyW - 4, bodyH - 5, "#6b5545");
+
+  add(headX, headY + 1, headW, headH - 1, skin);
+  add(headX + 2, headY + Math.floor(headH / 2), 1, 1, dark);
+  add(headX + headW - 3, headY + Math.floor(headH / 2), 1, 1, dark);
+  if (spec.raceId === "vampire") add(headX + 3, headY + headH - 2, 1, 1, "#ffffff");
+  if (spec.ill) add(headX + headW - 3, headY + 2, 2, 1, "#ffffff");
+
+  const hair = spec.hair;
+  add(headX, headY, headW, 2, hair);
+  if (spec.hairStyle === "long") {
+    add(headX - 1, headY, 1, headH + 2, hair);
+    add(headX + headW, headY, 1, headH + 2, hair);
+  } else if (spec.hairStyle === "tied") {
+    add(headX + headW, headY + 1, 2, 4, hair);
+  } else if (spec.hairStyle === "medium") {
+    add(headX - 1, headY, 1, headH - 2, hair);
+    add(headX + headW, headY, 1, headH - 2, hair);
+  } else {
+    add(headX - 1, headY, 1, 3, hair);
+    add(headX + headW, headY, 1, 3, hair);
+  }
+  if (spec.stage === "elder") add(headX + 1, headY + headH - 1, headW - 2, 2, "#b9b4a8");
+
+  switch (spec.raceId) {
+    case "beastkin":
+      add(headX, headY - 2, 2, 2, hair);
+      add(headX + headW - 2, headY - 2, 2, 2, hair);
+      break;
+    case "dwarf":
+      add(headX + 1, headY + headH - 2, headW - 2, 4, "#8c7a5a");
+      break;
+    case "elf":
+      add(headX - 3, headY + 2, 3, 1, skin);
+      add(headX + headW, headY + 2, 3, 1, skin);
+      break;
+    case "demon":
+      add(headX + 1, headY - 3, 1, 3, "#3a2230");
+      add(headX + headW - 2, headY - 3, 1, 3, "#3a2230");
+      break;
+    case "dragon":
+      add(headX + 1, headY - 2, 1, 2, "#d8c9a0");
+      add(headX + headW - 2, headY - 2, 1, 2, "#d8c9a0");
+      add(headX + 1, headY + headH - 2, headW - 2, 1, "#4f7a55");
+      break;
+    case "vampire":
+      add(left - 2, bodyY - 1, bodyW + 4, 2, "#49344d");
+      break;
+    default:
+      break;
+  }
+
+  if (spec.outfit.hat === "helmet") add(headX, headY - 1, headW, 3, "#aab0ba");
+  else if (spec.outfit.hat === "wizard") {
+    add(headX - 2, headY, headW + 4, 1, spec.outfit.coat);
+    add(headX + 1, headY - 4, headW - 2, 4, spec.outfit.coat);
+    add(headX + 2, headY - 6, headW - 4, 2, spec.outfit.coat);
+  } else if (spec.outfit.hat === "straw") add(headX - 2, headY - 1, headW + 4, 2, "#d6bd7a");
+  else if (spec.outfit.hat === "crown") add(headX + 1, headY - 3, headW - 2, 3, "#e6c75a");
+  else if (spec.outfit.hat === "feather") add(headX + headW - 2, headY - 4, 1, 4, "#c04040");
+
+  const propX = left + bodyW + 2;
+  switch (spec.outfit.prop) {
+    case "spear": add(propX, bodyY - 6, 1, bodyH + legH + 6, "#8a6b45"); add(propX - 1, bodyY - 8, 3, 2, "#c9ced6"); break;
+    case "sword": add(propX, bodyY + 2, 1, bodyH, "#c9ced6"); add(propX - 1, bodyY + bodyH - 2, 3, 1, "#d8b96f"); break;
+    case "staff": add(propX, bodyY - 4, 1, bodyH + legH + 4, "#8a6b45"); add(propX - 1, bodyY - 6, 3, 2, "#9ad0f0"); break;
+    case "hoe": add(propX, bodyY - 2, 1, bodyH + legH + 2, "#8a6b45"); add(propX - 1, bodyY - 2, 3, 1, "#9a9a9a"); break;
+    case "hammer": add(propX, bodyY + 1, 1, bodyH, "#8a6b45"); add(propX - 1, bodyY, 3, 2, "#6a6a72"); break;
+    case "book": add(left - 3, bodyY + bodyH - 5, 3, 3, "#a87a4a"); break;
+    case "pouch": add(left + bodyW - 2, bodyY + bodyH - 3, 3, 3, "#d8b96f"); break;
+    default: break;
+  }
+  if (spec.stage === "elder") add(propX, bodyY + 3, 1, bodyH + legH - 3, "#8a6b45");
+  return { rects, shape };
+}
+
+function drawPerson(context, spec, x, ground, scale, { walking = false, frame = 0 } = {}) {
+  const { rects } = buildSprite(spec, frame, walking);
+  const left = Math.round(x - 10 * scale);
+  const top = Math.round(ground - 34 * scale);
+  context.imageSmoothingEnabled = false;
+  for (const rect of rects) {
+    context.fillStyle = rect.color;
+    context.fillRect(left + rect.x * scale, top + rect.y * scale, rect.w * scale, rect.h * scale);
+  }
+}
 
 export function agePositionPercent(age) {
   const waypoints = [[0, 5], [20, 17], [40, 45], [60, 65], [80, 82], [100, 94], [120, 98]];
@@ -70,59 +209,6 @@ export function agePositionPercent(age) {
     }
   }
   return 98;
-}
-
-function drawPerson(context, sprite, x, ground, scale, {
-  walking = false,
-  frame = 0,
-  hair = "#34271f",
-  coat = "#647d72",
-  race = "human",
-  age = 20,
-  role = "main",
-} = {}) {
-  const rows = walking ? sprite.walk[frame % sprite.walk.length] : sprite.idle;
-  const palette = { ...sprite.palette, H: age >= 85 ? "#aaa394" : hair, C: coat };
-  const width = sprite.width * scale;
-  const height = sprite.height * scale;
-  const pixel = Math.max(1, Math.floor(scale));
-  const left = Math.round(x - width / 2);
-  const top = Math.round(ground - height);
-  context.imageSmoothingEnabled = false;
-  for (let y = 0; y < sprite.height; y += 1) {
-    for (let column = 0; column < sprite.width; column += 1) {
-      const color = palette[rows[y][column]];
-      if (color) {
-        context.fillStyle = color;
-        context.fillRect(left + column * scale, top + y * scale, pixel, pixel);
-      }
-    }
-  }
-  context.fillStyle = race === "elf" ? "#668c68" : race === "demon" ? "#8f5260" : "#34271f";
-  if (race === "beastkin") {
-    context.fillRect(left + 5 * scale, top + 2 * scale, pixel, pixel * 2);
-    context.fillRect(left + 10 * scale, top + 2 * scale, pixel, pixel * 2);
-    context.fillRect(left + 12 * scale, top + 15 * scale, pixel * 2, pixel);
-  } else if (race === "dwarf") {
-    context.fillStyle = "#8c8171";
-    context.fillRect(left + 6 * scale, top + 6 * scale, pixel * 4, pixel * 2);
-  } else if (race === "elf") {
-    context.fillRect(left + 3 * scale, top + 6 * scale, pixel * 2, pixel);
-    context.fillRect(left + 11 * scale, top + 6 * scale, pixel * 2, pixel);
-  } else if (race === "demon") {
-    context.fillRect(left + 5 * scale, top + 1 * scale, pixel, pixel * 2);
-    context.fillRect(left + 10 * scale, top + 1 * scale, pixel, pixel * 2);
-  } else if (race === "dragon") {
-    context.fillRect(left + 1 * scale, top + 9 * scale, pixel * 3, pixel * 3);
-    context.fillRect(left + 12 * scale, top + 9 * scale, pixel * 3, pixel * 3);
-  } else if (race === "vampire") {
-    context.fillStyle = "#49344d";
-    context.fillRect(left + 3 * scale, top + 10 * scale, pixel * 10, pixel);
-  }
-  if (role === "main" && age >= 60) {
-    context.fillStyle = "#786f64";
-    context.fillRect(left + 6 * scale, top + 8 * scale, pixel, pixel);
-  }
 }
 
 function drawLandscape(context, width, height, life) {
@@ -183,6 +269,16 @@ function drawLandscape(context, width, height, life) {
   }
 }
 
+export function livingFamily(life) {
+  const npcs = life.npcs ?? [];
+  const spouse = life.spouseId ? npcs.find((npc) => npc.id === life.spouseId && npc.alive) : null;
+  const children = (life.children ?? [])
+    .map((entry) => (typeof entry === "string" ? npcs.find((npc) => npc.id === entry) ?? { id: entry, humanAge: 6, alive: true, legacy: true } : entry))
+    .filter((child) => child && child.alive !== false && !child.independent);
+  const spouseFallback = !life.spouseId && life.spouse ? { name: String(life.spouse), humanAge: Math.max(20, (life.age ?? 20) - 2), gender: "その他", occupation: "", race: life.race?.id } : null;
+  return { spouse: spouse ?? spouseFallback, children };
+}
+
 export function drawJourney(context, sprite, { life, frame = 0 } = {}) {
   if (!context || !life) return;
   const { width, height } = context.canvas;
@@ -190,31 +286,38 @@ export function drawJourney(context, sprite, { life, frame = 0 } = {}) {
   drawLandscape(context, width, height, life);
   const age = life.age ?? 0;
   const x = width * agePositionPercent(age) / 100;
-  const ageScale = age < 8 ? 1.55 : age < 18 ? 1.9 : age > 85 ? 2.6 : 2.35;
-  const coat = life.occupation === "兵士" ? "#657491"
-    : life.occupation === "冒険者" ? "#87634c"
-      : life.occupation === "教師" ? "#786984"
-        : life.appearance?.coat ?? "#647d72";
-  drawPerson(context, sprite, x, height - 16, ageScale, {
-    walking: life.playing,
-    frame,
-    hair: life.appearance?.hair,
-    coat,
-    race: life.race?.id,
-    age,
-  });
-  let familyOffset = 0;
-  if (life.spouse) {
-    familyOffset += 1;
-    drawPerson(context, sprite, x + 14 * ageScale, height - 14, 1.45, {
-      hair: "#765947", coat: "#9b6855", race: life.race?.id, age: 25, role: "family",
-    });
+  const ground = height - 14;
+  const scale = Math.max(1, Math.min(3, Math.floor((height - 24) / 36)));
+  const walking = Boolean(life.playing) && life.active !== false;
+  if (life.active !== false) {
+    drawPerson(context, buildHeroSpec(life), x, ground, scale, { walking, frame });
   }
-  (life.children ?? []).slice(-3).forEach((_, index) => {
-    drawPerson(context, sprite, x + (15 + familyOffset * 8 + index * 10) * ageScale, height - 13, 1.05, {
-      hair: "#47312b", coat: "#8e7957", race: life.race?.id, age: 8, role: "family",
-    });
+  const { spouse, children } = livingFamily(life);
+  const spacing = 13 * scale;
+  let cursor = x + spacing;
+  if (spouse && life.active !== false) {
+    drawPerson(context, spriteSpec({ ...spouse, race: spouse.race ?? life.race?.id }), Math.min(cursor, width - 12 * scale), ground, scale, { walking, frame: frame + 1 });
+    cursor += spacing;
+  }
+  const slots = Math.max(0, Math.floor((width - 12 * scale - cursor) / (9 * scale)) + 1);
+  const shown = life.active === false ? [] : children.slice(0, Math.min(slots, 5));
+  shown.forEach((child, index) => {
+    const childScale = Math.max(1, scale - 1);
+    drawPerson(context, spriteSpec({ ...child, race: child.race ?? life.race?.id, name: child.name ?? String(child.id) }), cursor + index * 9 * scale, ground, childScale, { walking, frame: frame + index });
   });
+  const hidden = children.length - shown.length;
+  if (hidden > 0 && context.fillText) {
+    context.fillStyle = "#4a3a2c";
+    context.font = "bold 12px sans-serif";
+    context.fillText(`+${hidden}`, Math.min(width - 24, cursor + shown.length * 9 * scale), ground - 4);
+  }
+}
+
+export function buildHeroSpec(life) {
+  return spriteSpec({
+    race: life.race?.id, age: life.age, gender: life.gender, name: life.name, occupation: life.occupation,
+    status: life.status, appearance: life.appearance, health: life.health,
+  }, { isHero: true });
 }
 
 export function drawCharacter(context, sprite, options = {}) {

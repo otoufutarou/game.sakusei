@@ -2,138 +2,120 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#F5F0E6">
-    <title>灯火の一生 — Fantasy Life</title>
+    <title>灯火の一生</title>
     <link rel="stylesheet" href="./styles.css">
     <script type="module" src="./src/main.js"></script>
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
-        <a class="wordmark" href="./" aria-label="灯火の一生 ホーム">
-          <span class="wordmark-icon" aria-hidden="true">✦</span>
-          <span><strong>灯火の一生</strong><small>FANTASY LIFE SIMULATOR</small></span>
-        </a>
-        <div class="world-status">
-          <span class="live-dot" aria-hidden="true"></span>
-          <span id="world-status">世界は穏やかです</span>
-          <span class="status-divider" aria-hidden="true"></span>
-          <span id="year-display">第 1 年</span>
-        </div>
-        <button class="history-button" id="open-history" type="button">人生の記録</button>
-        <button class="new-life-button" id="new-life" type="button">新しい人生 <span aria-hidden="true">↻</span></button>
+        <strong class="wordmark">灯火の一生</strong>
+        <span class="world-status" id="world-status">世界は穏やかです</span>
+        <nav class="top-actions">
+          <button class="chip-button" id="open-history" type="button">記録</button>
+          <button class="chip-button" id="new-life" type="button">新しい人生</button>
+        </nav>
       </header>
 
-      <section class="intro">
-        <div>
-          <p class="eyebrow">A LIFE UNWRITTEN</p>
-          <h1>ひとつの人生、<em>ひとつの物語。</em></h1>
+      <section class="hero-card" aria-label="主人公">
+        <div class="hero-head">
+          <div>
+            <h1 id="character-name">---</h1>
+            <p id="character-summary" class="hero-sub">生まれたばかり</p>
+          </div>
+          <span class="age-badge" id="age-badge">0歳</span>
         </div>
-        <div class="chapter-mark"><span>章</span><strong id="chapter-display">01</strong></div>
+        <div class="quick-stats">
+          <button type="button" class="quick-stat" id="open-status"><small>職業</small><strong id="occupation-value">---</strong></button>
+          <div class="quick-stat static"><small>健康</small><strong id="health-value">健やか</strong></div>
+          <button type="button" class="quick-stat" id="open-money"><small>所持金</small><strong id="gold-value">0G</strong></button>
+        </div>
+        <div class="character-scene" data-region="kingdom">
+          <canvas id="character-canvas" width="400" height="150" role="img" aria-label="人生の道を歩む主人公のドット絵"></canvas>
+          <span class="scene-caption" id="scene-caption"></span>
+        </div>
+        <p class="family-line" id="people-value">家族</p>
+        <button class="link-button" id="open-status-2" type="button">詳細ステータス ›</button>
       </section>
 
-      <div class="game-layout">
-        <aside class="left-column">
-          <section class="panel character-panel" aria-labelledby="character-heading">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">YOUR LIFE</p>
-                <h2 id="character-heading">主人公</h2>
-              </div>
-              <span class="age-badge" id="age-badge">0歳</span>
-            </div>
-            <div class="character-scene">
-              <canvas id="character-canvas" width="1000" height="124" role="img" aria-label="人生の道を歩む主人公のドット絵"></canvas>
-              <span class="scene-caption" id="scene-caption">新しい物語のはじまり</span>
-            </div>
-            <div class="identity">
-              <h3 id="character-name">---</h3>
-              <p id="character-summary">生まれたばかり</p>
-              <div class="identity-tags">
-                <span id="race-tag">種族</span><span id="status-tag">身分</span>
-              </div>
-            </div>
-            <div class="traits">
-              <div><span class="trait-icon">⌂</span><span id="home-detail">出生地を紡いでいます</span></div>
-              <div><span class="trait-icon">◷</span><span id="occupation-detail">まだ幼い子ども</span></div>
-            </div>
-            <div class="stat-grid">
-              <div class="stat-item"><span class="stat-icon coin">G</span><div><small>所持金</small><strong id="gold-value">12 G</strong></div></div>
-              <div class="stat-item"><span class="stat-icon heart">♥</span><div><small>健康</small><strong id="health-value">健やか</strong></div></div>
-              <div class="stat-item"><span class="stat-icon star">✦</span><div><small>名声</small><strong id="fame-value">無名</strong></div></div>
-              <div class="stat-item"><span class="stat-icon people">⌁</span><div><small>大切な人</small><strong id="people-value">家族</strong></div></div>
-            </div>
-            <section class="controls-panel" aria-labelledby="controls-heading">
-              <div class="controls-heading">
-                <h2 id="controls-heading">人生の歩み</h2>
-                <span class="flow-indicator" id="flow-indicator"><i></i>進行中</span>
-              </div>
-              <div class="control-buttons">
-                <button class="primary-control" id="toggle-play" type="button" aria-label="一時停止">Ⅱ <span>一時停止</span></button>
-                <button class="secondary-control" id="next-decision" type="button">次の決断まで <span aria-hidden="true">→</span></button>
-              </div>
-              <div class="speed-row">
-                <span>時間の流れ</span>
-                <div class="speed-options" role="group" aria-label="再生速度">
-                  <button type="button" data-speed="1" class="selected" aria-pressed="true">1×</button>
-                  <button type="button" data-speed="2" aria-pressed="false">2×</button>
-                  <button type="button" data-speed="4" aria-pressed="false">4×</button>
-                  <button type="button" data-speed="8" aria-pressed="false">8×</button>
-                </div>
-              </div>
-            </section>
-          </section>
-        </aside>
+      <section class="log-card" aria-labelledby="journal-heading">
+        <div class="log-head">
+          <h2 id="journal-heading">最近の出来事</h2>
+          <span class="log-count"><span id="event-count">0</span> 件</span>
+        </div>
+        <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
+        <button class="link-button" id="open-history-inline" type="button">過去の記録をすべて見る ›</button>
+      </section>
 
-        <section class="panel journal-panel" aria-labelledby="journal-heading">
-          <div class="journal-header">
-            <div>
-              <p class="eyebrow">THE LIFE CHRONICLE</p>
-              <h2 id="journal-heading">人生の記録</h2>
-            </div>
-            <div class="journal-count"><span class="live-dot" aria-hidden="true"></span><span id="event-count">0</span> 件</div>
+      <section class="controls-bar" aria-label="進行の操作">
+        <div class="control-buttons">
+          <button class="primary-control" id="toggle-play" type="button" aria-label="一時停止">Ⅱ <span>一時停止</span></button>
+          <button class="secondary-control" id="next-decision" type="button">次の選択まで →</button>
+        </div>
+        <div class="speed-row">
+          <span class="flow-indicator" id="flow-indicator"><i></i>進行中</span>
+          <div class="speed-options" role="group" aria-label="再生速度">
+            <button type="button" data-speed="1" class="selected" aria-pressed="true">1×</button>
+            <button type="button" data-speed="2" aria-pressed="false">2×</button>
+            <button type="button" data-speed="4" aria-pressed="false">4×</button>
+            <button type="button" data-speed="8" aria-pressed="false">8×</button>
           </div>
-          <p class="journal-note">最新の出来事</p>
-          <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
-          <button class="history-button history-inline" id="open-history-inline" type="button">過去の記録をすべて見る →</button>
-        </section>
-      </div>
+        </div>
+      </section>
+
+      <footer class="build-line"><span id="build-id">build: dev</span></footer>
+
       <section class="history-page" id="history-page" hidden aria-labelledby="history-heading">
-        <header class="journal-header">
-          <div><p class="eyebrow">THE LIFE CHRONICLE</p><h2 id="history-heading">人生の記録</h2></div>
-          <button class="history-button" id="close-history" type="button">ゲームに戻る</button>
+        <header class="log-head">
+          <h2 id="history-heading">人生の記録</h2>
+          <button class="chip-button" id="close-history" type="button">ゲームに戻る</button>
         </header>
         <ol class="event-list history-list" id="history-list"></ol>
       </section>
     </main>
 
-    <dialog class="decision-dialog prologue-dialog" id="prologue-dialog" aria-labelledby="prologue-title">
-      <div class="dialog-spark" aria-hidden="true">✦</div>
-      <p class="eyebrow">A NEW LIFE BEGINS</p>
+    <dialog class="game-dialog" id="prologue-dialog" aria-labelledby="prologue-title">
       <h2 id="prologue-title">あなたの生まれた家</h2>
       <p class="dialog-copy" id="prologue-copy"></p>
-      <div class="birth-record" id="birth-record"></div>
-      <button class="primary-control ending-button" id="begin-life" type="button">人生を始める <span aria-hidden="true">→</span></button>
+      <div class="record-grid" id="birth-record"></div>
+      <p class="dialog-note" id="prologue-note"></p>
+      <button class="primary-control wide" id="begin-life" type="button">人生を始める →</button>
+      <button class="link-button" id="resume-life" type="button" hidden>保存した人生を続ける</button>
     </dialog>
 
-    <dialog class="decision-dialog" id="decision-dialog" aria-labelledby="decision-title">
-      <div class="dialog-spark" aria-hidden="true">✦</div>
-      <p class="eyebrow">A MOMENT TO CHOOSE</p>
-      <p class="dialog-age" id="decision-age">18歳</p>
-      <h2 id="decision-title">決断の時</h2>
+    <dialog class="game-dialog" id="decision-dialog" aria-labelledby="decision-title">
+      <p class="dialog-age" id="decision-age"></p>
+      <h2 id="decision-title">選択</h2>
       <p class="dialog-copy" id="decision-copy"></p>
       <div class="choice-list" id="choice-list"></div>
-      <p class="dialog-footnote">選んだ後、人生はまた静かに動き始めます。</p>
     </dialog>
 
-    <dialog class="decision-dialog ending-dialog" id="ending-dialog" aria-labelledby="ending-title">
-      <div class="dialog-spark" aria-hidden="true">✦</div>
-      <p class="eyebrow">THE END OF A LIFE</p>
-      <h2 id="ending-title">ひとつの物語が結ばれました</h2>
+    <dialog class="game-dialog" id="result-dialog" aria-labelledby="result-title">
+      <p class="dialog-age" id="result-choice"></p>
+      <h2 id="result-title">結果</h2>
+      <p class="dialog-copy" id="result-message"></p>
+      <ul class="result-list" id="result-details"></ul>
+      <button class="primary-control wide" id="close-result" type="button">続ける</button>
+    </dialog>
+
+    <dialog class="game-dialog wide-dialog" id="status-dialog" aria-labelledby="status-title">
+      <header class="dialog-bar"><h2 id="status-title">詳細ステータス</h2><button class="chip-button" data-close="status-dialog" type="button">閉じる</button></header>
+      <div id="status-body" class="detail-body"></div>
+    </dialog>
+
+    <dialog class="game-dialog wide-dialog" id="money-dialog" aria-labelledby="money-title">
+      <header class="dialog-bar"><h2 id="money-title">所持金の内訳</h2><button class="chip-button" data-close="money-dialog" type="button">閉じる</button></header>
+      <div id="money-body" class="detail-body"></div>
+    </dialog>
+
+    <dialog class="game-dialog" id="ending-dialog" aria-labelledby="ending-title">
+      <h2 id="ending-title">ひとつの人生が終わりました</h2>
       <p class="dialog-copy" id="ending-copy"></p>
-      <div class="ending-record" id="ending-record"></div>
-      <button class="primary-control ending-button" id="ending-new-life" type="button">新しい人生を始める <span aria-hidden="true">→</span></button>
+      <div class="record-grid" id="ending-record"></div>
+      <button class="primary-control wide" id="ending-new-life" type="button">新しい人生を始める →</button>
+      <button class="link-button" id="ending-history" type="button">人生の記録を見る ›</button>
     </dialog>
   </body>
 </html>
