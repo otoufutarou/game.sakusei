@@ -103,13 +103,24 @@ export function saveToStorage(life, storage = globalThis.localStorage) {
   }
 }
 
-export function loadFromStorage(storage = globalThis.localStorage) {
+// Returns { life, error }. An unreadable save is reported (and left in storage) rather than silently discarded.
+export function inspectSave(storage = globalThis.localStorage) {
+  let text;
   try {
-    const text = storage.getItem(SAVE_KEY);
-    return text ? deserializeLife(text) : null;
-  } catch {
-    return null;
+    text = storage.getItem(SAVE_KEY);
+  } catch (error) {
+    return { life: null, error: `保存領域にアクセスできません（${error.message}）` };
   }
+  if (!text) return { life: null, error: null };
+  try {
+    return { life: deserializeLife(text), error: null };
+  } catch (error) {
+    return { life: null, error: `保存データを読み込めませんでした（${error.message}）` };
+  }
+}
+
+export function loadFromStorage(storage = globalThis.localStorage) {
+  return inspectSave(storage).life;
 }
 
 export function clearSave(storage = globalThis.localStorage) {

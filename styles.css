@@ -165,3 +165,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .quick-stats { grid-template-columns: 1fr 1fr; }
   .quick-stats .quick-stat:first-child { grid-column: 1 / -1; }
 }
+
+.startup-error { margin: 8px 12px; padding: 10px 12px; border: 1px solid #b4452f; border-radius: 10px; background: #fbe9e4; color: #7a2a1a; font-size: 14px; }
+.startup-error[hidden] { display: none; }

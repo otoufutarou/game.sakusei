@@ -36,3 +36,11 @@ Run the simulation regression suite with:
 ```sh
 node --experimental-default-type=module --test src/simulation.test.js
 ```
+
+Browser integration test (headless Chromium, serves the page under `/game.sakusei/` with `?v=` stamping like the deploy, clicks the real buttons, checks age progression, pause/resume, decisions, sprite, reload/resume, legacy and corrupt saves, and console errors):
+
+```sh
+npm install && npm run test:browser
+```
+
+If the game cannot start, the page now shows the reason (`#startup-error`); an unreadable save is reported in the title dialog and kept until the player starts a new life.

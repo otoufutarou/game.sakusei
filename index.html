@@ -7,8 +7,25 @@
     <title>灯火の一生</title>
     <link rel="stylesheet" href="./styles.css">
     <script type="module" src="./src/main.js"></script>
+    <script>
+      // Surfaces a failed start (import error, unsupported browser) instead of leaving a silent placeholder screen.
+      (function () {
+        function show(message) {
+          var box = document.getElementById("startup-error");
+          if (!box) return;
+          box.hidden = false;
+          box.textContent = "ゲームを開始できませんでした: " + message;
+        }
+        window.addEventListener("error", function (event) { if (!window.__game) show(event.message || "読み込みエラー"); });
+        window.addEventListener("unhandledrejection", function (event) { if (!window.__game) show(String(event.reason)); });
+        window.addEventListener("load", function () {
+          setTimeout(function () { if (!window.__game) show("スクリプトが読み込まれませんでした。ページを再読み込みしてください。"); }, 3000);
+        });
+      })();
+    </script>
   </head>
   <body>
+    <p class="startup-error" id="startup-error" role="alert" hidden></p>
     <main class="app-shell">
       <header class="topbar">
         <strong class="wordmark">灯火の一生</strong>
@@ -81,6 +98,7 @@
       <p class="dialog-copy" id="prologue-copy"></p>
       <div class="record-grid" id="birth-record"></div>
       <p class="dialog-note" id="prologue-note"></p>
+      <p class="startup-error" id="save-warning" role="status" hidden></p>
       <button class="primary-control wide" id="begin-life" type="button">人生を始める →</button>
       <button class="link-button" id="resume-life" type="button" hidden>保存した人生を続ける</button>
     </dialog>
