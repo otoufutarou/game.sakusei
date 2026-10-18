@@ -155,7 +155,7 @@ const OCCUPATION_SKILLS = Object.freeze({
   "縄張りを見回る": "dragon",
 });
 
-const SKILL_IDS = [...new Set([
+export const SKILL_IDS_LIST = [...new Set([
   ...Object.values(OCCUPATION_SKILLS),
   "magic", "curse", "smithing", "finework", "hunting", "archery",
   "flight", "dragon", "stealth", "charm", "literacy", "swordsmanship", "scholarship",
@@ -341,8 +341,8 @@ export function createLife(random = Math.random) {
     speed: 1,
     gold: parents.gold,
     debt: parents.debt,
-    skills: Object.fromEntries(SKILL_IDS.map((skill) => [skill, 0])),
-    skillTalents: Object.fromEntries(SKILL_IDS.map((skill) => [skill, rollTalent(random)])),
+    skills: Object.fromEntries(SKILL_IDS_LIST.map((skill) => [skill, 0])),
+    skillTalents: Object.fromEntries(SKILL_IDS_LIST.map((skill) => [skill, rollTalent(random)])),
     skillPractice: {},
     skillMonthProgress: 0,
     skillHistory: [],
@@ -433,14 +433,14 @@ function addFlag(life, flag) {
 
 function ensureSkillState(life) {
   if (!life.skills) {
-    life.skills = Object.fromEntries(SKILL_IDS.map((skill) => [skill, 0]));
+    life.skills = Object.fromEntries(SKILL_IDS_LIST.map((skill) => [skill, 0]));
     const currentSkill = OCCUPATION_SKILLS[life.occupation] ?? "general";
     life.skills[currentSkill] = life.occupationSkill ?? 0;
   }
-  for (const skill of SKILL_IDS) {
+  for (const skill of SKILL_IDS_LIST) {
     if (typeof life.skills[skill] !== "number") life.skills[skill] = 0;
   }
-  life.skillTalents ??= Object.fromEntries(SKILL_IDS.map((skill) => [skill, "普通"]));
+  life.skillTalents ??= Object.fromEntries(SKILL_IDS_LIST.map((skill) => [skill, "普通"]));
   life.skillPractice ??= {};
   life.skillHistory ??= [];
   life.skillMonthProgress ??= 0;
@@ -1745,7 +1745,7 @@ export const CHOICE_EVENTS = [
   },
   {
     id: "choice-marriage-crisis", title: "冷え切った夫婦", category: "恋愛・結婚", weight: 1.5, priority: true,
-    requirements: { minAge: 20, requiresFlag: "married", cooldownYears: 5, custom: (life) => Boolean(life.spouseId) && (life.marriage?.harmony ?? 100) < 30 },
+    requirements: { minAge: 20, requiresFlag: "married", cooldownYears: 5, custom: (life) => Boolean(life.spouseId) && (life.marriage?.harmony ?? 100) < 36 },
     copy: (life) => `${life.spouse ?? "配偶者"}との溝が深まり、夫婦の関係は冷え切っている。このまま続けるか、向き合うか、別れるか。`,
     choices: [{ label: "関係の修復に努める", effect: "mend-marriage" }, { label: "離婚する", effect: "divorce" }, { label: "距離を置いたまま続ける", effect: "endure-marriage" }],
   },
@@ -2475,8 +2475,9 @@ function monthlyUpdate(life, random) {
   if (working) updateRole(life, random);
   advancePregnancy(life, random, 1);
   if (life.marriage) {
-    const strain = life.gold < 3 && life.debt > 5 ? -0.25 : 0.04;
-    adjustHarmony(life, strain + (random() - 0.5) * 0.5);
+    const strain = life.gold < 3 && life.debt > 5 ? -0.35 : 0;
+    const settle = (55 - life.marriage.harmony) * 0.006;
+    adjustHarmony(life, strain + settle + (random() - 0.5) * 2.6);
   }
   if (life.occupation === "失業中") {
     const chance = life.world?.situation === "不況" ? 0.02 : 0.1;
@@ -2500,6 +2501,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       life.trainingEndsAt ?? Infinity, life.world?.nextChangeAt ?? Infinity,
     );
     const elapsed = Math.max(0, Math.min(remaining, nextScheduled - life.age));
+    if (Number.isNaN(elapsed)) break;
     if (elapsed > 0) {
       life.age += elapsed;
       remaining -= elapsed;

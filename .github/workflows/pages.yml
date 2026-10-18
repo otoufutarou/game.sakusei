@@ -23,8 +23,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Stamp the build so browsers never reuse an old copy
+        run: |
+          set -euo pipefail
+          BUILD="${GITHUB_SHA::7}"
+          mkdir -p _site/src
+          cp index.html styles.css _site/
+          cp src/main.js src/simulation.js src/stats.js src/save.js src/character-sprite.js _site/src/
+          # Every internal module import and the entry-point assets get the same ?v= so modules stay single instances.
+          sed -i -E "s#from \"\./([a-z-]+)\.js\"#from \"./\1.js?v=${BUILD}\"#" _site/src/*.js
+          sed -i -E "s#(href|src)=\"\./(styles\.css|src/main\.js)\"#\1=\"./\2?v=${BUILD}\"#" _site/index.html
+          sed -i "s#__BUILD_ID__#${BUILD}#" _site/src/main.js
+          grep -n "?v=${BUILD}" _site/index.html _site/src/main.js
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
