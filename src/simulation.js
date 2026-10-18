@@ -9,11 +9,11 @@ export const RACES = [
 ];
 
 const NATIONS = [
-  { name: "ルヴェンティル王国", population: 30, native: { human: 75, beastkin: 15, dwarf: 5, demon: 3, elf: 2 }, slaves: true },
-  { name: "ヴェルグ帝国", population: 30, native: { human: 65, beastkin: 20, dwarf: 5, demon: 8, elf: 2 }, slaves: true },
-  { name: "セレフィア森林国", population: 15, native: { dwarf: 3, demon: 2, elf: 95 }, slaves: false },
-  { name: "グランツ山岳連邦", population: 15, native: { dwarf: 90, demon: 4, elf: 6 }, slaves: false },
-  { name: "ザルヴェディア魔族領", population: 10, native: { dwarf: 4, demon: 90, elf: 6 }, slaves: true },
+  { id: "kingdom", name: "ルヴェンティル王国", population: 30, native: { human: 75, beastkin: 15, dwarf: 5, demon: 3, elf: 2 }, slaves: true },
+  { id: "empire", name: "ヴェルグ帝国", population: 30, native: { human: 65, beastkin: 20, dwarf: 5, demon: 8, elf: 2 }, slaves: true },
+  { id: "forest", name: "セレフィア森林国", population: 15, native: { dwarf: 3, demon: 2, elf: 95 }, slaves: false },
+  { id: "mountain", name: "グランツ山岳連邦", population: 15, native: { dwarf: 90, demon: 4, elf: 6 }, slaves: false },
+  { id: "demon-realm", name: "ザルヴェディア魔族領", population: 10, native: { dwarf: 4, demon: 90, elf: 6 }, slaves: true },
 ];
 
 const STATUS_OPTIONS = [
@@ -45,8 +45,7 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
-  // Decision prompts and outcomes add roughly 0.5 journal entries per year.
-  logEventsPerHumanYear: 3,
+  routineLogIntervalYears: 1,
   decisionMeanYears: 4,
   firstDecisionEarliestAge: 13,
   minorIllnessChanceByAge: [
@@ -81,9 +80,77 @@ const AGE_DEATH_RATES = [
   { until: 119, rate: 0.25 },
 ];
 
+const OCCUPATION_RANKS = [
+  { skill: 0, name: "初心者" },
+  { skill: 20, name: "見習い" },
+  { skill: 40, name: "一人前" },
+  { skill: 60, name: "熟練" },
+  { skill: 80, name: "達人" },
+  { skill: 95, name: "巨匠級" },
+];
+
+export const ROUTINE_EVENTS = [
+  { id: "child-family", category: "家庭・親子", maxAge: 6, cooldownYears: 2, text: () => "家族と小さな食卓を囲み、今日あったことを一つずつ話した。" },
+  { id: "child-neighborhood", category: "友情・人間関係", maxAge: 13, minAge: 6, cooldownYears: 4, text: (life) => `${life.home}の近所で同じ年頃の子と知り合い、一緒に遊ぶ約束をした。` },
+  { id: "school-lesson", category: "学校・教育", minAge: 6, maxAge: 18, cooldownYears: 5, text: () => "読み書きの稽古で新しいことを学び、家に帰って家族にも教えた。" },
+  { id: "market-season", category: "日常生活", minAge: 6, cooldownYears: 6, text: (life) => `${life.home}の市で季節の品が並び、近所の人とささやかな話を交わした。` },
+  { id: "community-help", category: "日常生活", minAge: 6, cooldownYears: 7, text: () => "近所の人たちと力を合わせ、嵐で傷んだ共同井戸を直した。" },
+  { id: "old-friend", category: "友情・人間関係", minAge: 13, cooldownYears: 10, text: () => "昔からの友人と久しぶりに会い、互いの近況を語り合った。" },
+  { id: "local-festival", category: "日常生活", minAge: 6, cooldownYears: 8, text: () => "町の祭りを手伝い、普段は話さない人とも笑顔を交わした。" },
+  { id: "seasonal-work", category: "仕事・昇進", minAge: 13, cooldownYears: 6, occupations: ["農作業", "家業の手伝い"], text: () => "季節の収穫を手伝い、仕事仲間と分け合う食事を楽しんだ。" },
+  { id: "craft-order", category: "仕事・昇進", minAge: 13, cooldownYears: 8, occupations: ["職人見習い", "服飾店の見習い"], text: () => "少し難しい注文を任され、仕上げた品を親方に認められた。" },
+  { id: "trade-opportunity", category: "財産・借金", minAge: 18, cooldownYears: 9, minimumGold: 20, text: (life) => `蓄えを生かして${life.nation.name}の市で品を仕入れ、少し利益を得た。` },
+  { id: "workplace-mentor", category: "仕事・昇進", minAge: 18, cooldownYears: 8, minimumSkill: 20, text: () => "仕事の経験を買われ、後輩に道具の扱いを教える機会を得た。" },
+  { id: "tool-investment", category: "仕事・昇進", minAge: 18, cooldownYears: 10, minimumSkill: 5, requiresFlag: "invested-in-tools", text: () => "新調した道具が仕事の質を高め、以前は難しかった依頼を任された。" },
+  { id: "skilled-work", category: "仕事・昇進", minAge: 18, cooldownYears: 10, minimumSkill: 60, text: () => "長年磨いた技が評判となり、遠方からも仕事の依頼が届いた。" },
+  { id: "healing-rest", category: "病気・事故", minAge: 18, cooldownYears: 12, text: () => "疲れが重なって体調を崩したが、仕事を休んで療養し、回復した。" },
+  { id: "human-mage", category: "魔法・魔物", raceIds: ["human"], minAge: 6, cooldownYears: 10, text: () => "魔力の気配に気づいた町の魔術師から、簡単な術を教わる機会を得た。" },
+  { id: "beastkin-senses", category: "種族固有", raceIds: ["beastkin"], minAge: 6, cooldownYears: 8, text: () => "鋭い嗅覚で森道の異変に気づき、通りかかった旅人を危険から遠ざけた。" },
+  { id: "beastkin-hunt", category: "種族固有", raceIds: ["beastkin"], minAge: 13, cooldownYears: 10, text: () => "狩りで身軽さを発揮し、村の食卓に新鮮な獲物を持ち帰った。" },
+  { id: "dwarf-forge", category: "種族固有", raceIds: ["dwarf"], minAge: 13, cooldownYears: 9, text: () => "鍛冶場で初めて熱した金属を扱い、氏族の職人から手際を褒められた。" },
+  { id: "dwarf-vein", category: "種族固有", raceIds: ["dwarf"], minAge: 18, cooldownYears: 12, text: () => "山道の岩肌から新しい鉱脈の兆しを見つけ、採掘仲間に知らせた。" },
+  { id: "demon-horns", category: "種族固有", raceIds: ["demon"], minAge: 6, maxAge: 24, cooldownYears: 10, text: () => "角の先に魔力が宿り、淡い光が灯った。家族は一族の成長を祝った。" },
+  { id: "demon-magic", category: "種族固有", raceIds: ["demon"], minAge: 13, cooldownYears: 10, text: () => "魔力が思いがけずあふれて家財を揺らしたが、家族と練習して制御を覚えた。" },
+  { id: "demon-recruit", category: "種族固有", raceIds: ["demon"], nationIds: ["empire", "demon-realm"], minAge: 18, cooldownYears: 14, text: () => "軍の魔術部隊から勧誘を受け、自分の力をどこで生かすか考えた。" },
+  { id: "elf-spirit", category: "種族固有", raceIds: ["elf"], minAge: 13, cooldownYears: 12, text: () => "森の精霊の光が弱まっていることに気づき、長老と原因を探った。" },
+  { id: "elf-reunion", category: "種族固有", raceIds: ["elf"], minAge: 30, cooldownYears: 18, text: () => "数十年ぶりに幼なじみと再会し、変わらない森と移ろった人の世について話した。" },
+  { id: "dragon-flight", category: "種族固有", raceIds: ["dragon"], minAge: 6, maxAge: 40, cooldownYears: 12, text: () => "初めて自分の力だけで高く飛び、雲の上から広い山並みを見渡した。" },
+  { id: "dragon-hoard", category: "種族固有", raceIds: ["dragon"], minAge: 18, cooldownYears: 15, text: () => "巣を訪れた冒険者を追い返し、守り抜いた財宝を奥深くへ移した。" },
+  { id: "vampire-suspicion", category: "種族固有", raceIds: ["vampire"], minAge: 18, cooldownYears: 14, text: () => "夜にしか姿を見せないことを怪しまれたが、信頼する隣人には事情を打ち明けた。" },
+  { id: "vampire-retainer", category: "種族固有", raceIds: ["vampire"], minAge: 30, cooldownYears: 18, text: () => "長く仕えてきた眷属が自分の道を望み、互いの未来について話し合った。" },
+  { id: "kingdom-tax", category: "国家・法律", nationIds: ["kingdom"], minAge: 18, cooldownYears: 12, text: () => "領主の徴税が見直され、村人たちは新しい負担について相談した。" },
+  { id: "kingdom-court", category: "戦争・政治", nationIds: ["kingdom"], minAge: 18, cooldownYears: 15, text: () => "貴族の失脚が町の噂になり、王都の仕事や取引にも変化が広がった。" },
+  { id: "empire-draft", category: "国家・法律", nationIds: ["empire"], minAge: 18, cooldownYears: 12, text: () => "帝国の徴兵令が出され、家族や同僚と今後の暮らしを話し合った。" },
+  { id: "empire-supply", category: "戦争・政治", nationIds: ["empire"], minAge: 18, cooldownYears: 12, text: () => "軍需品の注文が増え、町の工房や商店に臨時の仕事が舞い込んだ。" },
+  { id: "forest-council", category: "国家・法律", nationIds: ["forest"], minAge: 18, cooldownYears: 12, text: () => "長老会議で森の保護が決まり、住民は採集や狩りの約束を見直した。" },
+  { id: "mountain-guild", category: "国家・法律", nationIds: ["mountain"], minAge: 13, cooldownYears: 10, text: () => "職人組合の競技会に参加し、氏族を越えた腕比べで刺激を受けた。" },
+  { id: "demon-rivalry", category: "戦争・政治", nationIds: ["demon-realm"], minAge: 18, cooldownYears: 12, text: () => "領主同士の権力争いが仕事にも影を落とし、周囲は立場を慎重に選んだ。" },
+];
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const randomItem = (items, random) => items[Math.floor(random() * items.length)];
 const rollExponential = (mean, random) => -Math.log(Math.max(Number.EPSILON, 1 - random())) * mean;
+
+export function routineLogMean(life) {
+  return TUNING.routineLogIntervalYears * life.race.multiplier;
+}
+
+export function isRoutineEventEligible(life, event, age = life.age) {
+  const requirements = event.requirements ?? event;
+  if (age < (requirements.minAge ?? 0) || age > (requirements.maxAge ?? Infinity)) return false;
+  if (requirements.raceIds && !requirements.raceIds.includes(life.race.id)) return false;
+  if (requirements.nationIds && !requirements.nationIds.includes(life.nation.id)) return false;
+  if (requirements.occupations && !requirements.occupations.includes(life.occupation)) return false;
+  if (requirements.minimumGold !== undefined && (life.gold ?? 0) < requirements.minimumGold) return false;
+  if (requirements.minimumSkill !== undefined && (life.occupationSkill ?? 0) < requirements.minimumSkill) return false;
+  if (requirements.requiresFlag && !(life.historyFlags ?? []).includes(requirements.requiresFlag)) return false;
+  const history = life.eventHistory ?? [];
+  if (requirements.oncePerLife && history.some((entry) => entry.id === event.id)) return false;
+  if ((life.journal ?? []).slice(-20).some((entry) => entry.id === event.id)) return false;
+  const lastOccurrence = [...history].reverse().find((entry) => entry.id === event.id);
+  if (lastOccurrence && age - lastOccurrence.age < (requirements.cooldownYears ?? 0)) return false;
+  return true;
+}
 
 function weightedPick(items, getWeight, random) {
   const total = items.reduce((sum, item) => sum + getWeight(item), 0);
@@ -148,12 +215,17 @@ export function createLife(random = Math.random) {
     health,
     fame: 0,
     occupation: "まだ幼い子ども",
+    occupationSkill: 0,
+    occupationYears: 0,
+    occupationRank: "初心者",
     familyCount: 0,
     eventCount: 0,
     journal: [],
+    eventHistory: [],
+    historyFlags: [],
     relationships: [],
     illnessUntil: 0,
-    nextLogAt: rollExponential(1 / TUNING.logEventsPerHumanYear, random),
+    nextLogAt: 0,
     nextDecisionAt: createInitialDecisionAge(random),
     pendingDecision: null,
     deathCause: null,
@@ -161,88 +233,38 @@ export function createLife(random = Math.random) {
     maxHumanAge: race.lifespan / race.multiplier,
     randomSeed: random(),
   };
+  life.nextLogAt = rollExponential(routineLogMean(life), random);
   appendEvent(life, birthStory(life), "life", "誕生");
   return life;
 }
 
-function appendEvent(life, text, kind = "life", label = "人生") {
-  const event = { age: life.age, text, kind, label };
+function appendEvent(life, text, kind = "life", label = "人生", id = null) {
+  const event = { age: life.age, text, kind, label, id };
   life.journal.push(event);
   life.eventCount += 1;
+  if (id) life.eventHistory.push({ id, age: life.age });
   return event;
 }
 
-function lifeStage(age) {
-  if (age < 6) return "child";
-  if (age < 13) return "school";
-  if (age < 18) return "youth";
-  if (age < 36) return "youngAdult";
-  if (age < 61) return "middle";
-  return "elder";
+function hasRecentEvent(life, id, cooldownYears) {
+  const appearsInRecentJournal = (life.journal ?? []).slice(-20).some((event) => event.id === id);
+  return appearsInRecentJournal || (life.eventHistory ?? []).some((event) => event.id === id && life.age - event.age < cooldownYears);
 }
 
-function ordinaryEvent(life, random) {
-  if (life.race.id === "dragon") {
-    const dragonEvents = [
-      ["竜の暮らし", "山の風を受け、翼を広げて巣の周りを飛んだ。"],
-      ["狩り", "山あいで獲物を見つけ、今日の糧を得た。"],
-      ["縄張り", "遠くから別の竜の咆哮が聞こえ、互いの縄張りを確かめた。"],
-      ["財宝", "洞窟の奥に小さな宝石を見つけ、巣へ持ち帰った。"],
-    ];
-    const [label, text] = randomItem(dragonEvents, random);
-    return { label, text, kind: "life" };
-  }
-  const stage = lifeStage(life.age);
-  const eventOptions = {
-    child: [
-      ["家族と過ごす", `家族と小さな食卓を囲んだ。${life.personality}なあなたは、みんなの話に耳を傾けた。`],
-      ["成長", "少しずつ言葉を覚え、身の回りの世界が広がっていく。"],
-      ["暮らし", `${life.home}の市場は朝からにぎわい、家族と買い物に出かけた。`],
-    ],
-    school: [
-      ["学び", "近所の読み書き教室で、新しい文字をいくつか覚えた。"],
-      ["友人", "同じ年頃の子と知り合い、帰り道を一緒に歩いた。"],
-      ["家族", "家の手伝いをして、家族から感謝された。"],
-    ],
-    youth: [
-      ["成長", "得意なことが少しずつ見えてきて、将来を考えるようになった。"],
-      ["人間関係", "友人と将来について語り合い、互いの夢を応援した。"],
-      ["暮らし", `${life.home}で新しい仕事の噂を耳にした。`],
-    ],
-    youngAdult: [
-      ["仕事", `${life.occupation}として経験を重ね、周囲から頼られることが増えた。`],
-      ["人間関係", "昔からの友人と再会し、近況を語り合った。"],
-      ["暮らし", `${life.home}の通りに新しい店が開き、町が少し活気づいた。`],
-      ["世界", worldUpdate(life)],
-    ],
-    middle: [
-      ["仕事", `${life.occupation}の仕事に慣れ、若い人に経験を伝える機会が増えた。`],
-      ["家族", "家族と過ごす時間を大切にしながら、日々の仕事を続けた。"],
-      ["世界", worldUpdate(life)],
-    ],
-    elder: [
-      ["人生", "長い年月で得た知恵を、近くに住む若者へ伝えた。"],
-      ["旧友", "懐かしい友人を訪ね、若い頃の思い出を語り合った。"],
-      ["暮らし", "無理をせず、馴染みの場所でゆっくりと日々を過ごした。"],
-    ],
+export function selectRoutineEvent(life, random = Math.random) {
+  const candidates = ROUTINE_EVENTS.filter((event) => isRoutineEventEligible(life, event));
+  if (candidates.length === 0) return null;
+  const event = weightedPick(candidates, (candidate) => candidate.weight ?? 1, random);
+  return {
+    id: event.id,
+    label: event.category,
+    text: typeof event.text === "function" ? event.text(life) : event.text,
+    kind: event.category === "戦争・政治" || event.category === "国家・法律" ? "world" : "life",
   };
-  const [label, text] = randomItem(eventOptions[stage], random);
-  return { label, text, kind: label === "世界" ? "world" : "life" };
-}
-
-function worldUpdate(life) {
-  const updates = {
-    平和: `${life.nation.name}では大きな争いもなく、穏やかな日々が続いている。`,
-    不況: `${life.nation.name}では商いが細り、仕事を探す人の姿が増えてきた。`,
-    疫病流行: `${life.nation.name}では疫病への警戒が続き、人々は医師の助言に耳を傾けている。`,
-    飢饉: `${life.nation.name}では食料が不足し、市場の値段も上がっている。`,
-    戦争中: `${life.nation.name}では戦が続き、町にも戦地の知らせが届いている。`,
-  };
-  return updates[life.situation] ?? updates["平和"];
 }
 
 function scheduleLog(life, random) {
-  life.nextLogAt = life.age + rollExponential(1 / TUNING.logEventsPerHumanYear, random);
+  life.nextLogAt = life.age + rollExponential(routineLogMean(life), random);
 }
 
 function pickCareer(life, random) {
@@ -250,6 +272,27 @@ function pickCareer(life, random) {
     ? ["狩りを覚える", "巣の外を探検する", "縄張りを見回る"]
     : WORKS;
   return randomItem(eligible, random);
+}
+
+function changeOccupation(life, occupation) {
+  if (life.occupation === occupation) return;
+  life.occupation = occupation;
+  life.occupationSkill = 0;
+  life.occupationYears = 0;
+  life.occupationRank = OCCUPATION_RANKS[0].name;
+}
+
+function advanceOccupation(life, elapsed) {
+  if (life.age < 13 || life.occupation === "まだ幼い子ども" || elapsed <= 0) return;
+  life.occupationYears += elapsed;
+  life.occupationSkill = clamp(life.occupationSkill + elapsed * 1.2, 0, 100);
+  const rank = [...OCCUPATION_RANKS].reverse().find((item) => life.occupationSkill >= item.skill);
+  if (rank.name === life.occupationRank) return;
+  life.occupationRank = rank.name;
+  const eventId = `occupation-rank-${life.occupation}-${rank.skill}`;
+  if (!hasRecentEvent(life, eventId, 0)) {
+    appendEvent(life, `${life.occupation}として${life.occupationRank}の腕前に達し、仕事仲間から認められた。`, "life", "仕事の成長", eventId);
+  }
 }
 
 function decisionFor(life, random) {
@@ -374,19 +417,22 @@ export function applyChoice(life, choice, random = Math.random) {
       break;
     case "study":
       life.fame += 1;
+      life.historyFlags.push("continued-education");
       message = "学びを続け、新しい知識を身につけた。";
       break;
     case "work":
       life.gold += 2;
+      if (life.occupation !== "まだ幼い子ども") life.occupationSkill = clamp(life.occupationSkill + 2, 0, 100);
+      life.historyFlags.push("helped-family-work");
       message = "家の仕事を手伝い、暮らしを支えた。";
       break;
     case "apprentice":
-      life.occupation = pickCareer(life, random);
+      changeOccupation(life, pickCareer(life, random));
       message = `${life.occupation}として見習いを始めた。`;
       life.gold += 4;
       break;
     case "career":
-      life.occupation = pickCareer(life, random);
+      changeOccupation(life, pickCareer(life, random));
       life.gold += 8 + Math.floor(random() * 8);
       life.fame += 1;
       message = `${life.occupation}の仕事を始め、新しい一歩を踏み出した。`;
@@ -399,6 +445,8 @@ export function applyChoice(life, choice, random = Math.random) {
       if (life.gold >= 5) {
         life.gold -= 5;
         life.fame += 2;
+        life.occupationSkill = clamp(life.occupationSkill + 5, 0, 100);
+        life.historyFlags.push("invested-in-tools");
         message = "仕事道具を新調した。仕事の幅が広がりそうだ。";
       } else {
         life.gold += 2;
@@ -461,13 +509,13 @@ function resolveHazards(life, elapsed, random) {
   }
 
   const accidentRate = TUNING.accidentChanceByWork[life.occupation] ?? TUNING.accidentChanceByWork.default;
-  if (random() < accidentRate * elapsed) {
+  if (!hasRecentEvent(life, "hazard-accident", 8) && random() < accidentRate * elapsed) {
     if (random() < TUNING.accidentFatality) {
       die(life, "事故");
       return;
     }
     life.health = random() < 0.35 ? "療養中" : life.health;
-    appendEvent(life, "仕事や移動の途中で事故に遭ったが、命に別状はなかった。", "world", "事故");
+    appendEvent(life, "仕事や移動の途中で事故に遭ったが、命に別状はなかった。", "world", "事故", "hazard-accident");
   }
 
   if (life.age < life.illnessUntil && random() < TUNING.illnessFatalityPerYearWhileIll * elapsed) {
@@ -475,10 +523,10 @@ function resolveHazards(life, elapsed, random) {
     return;
   }
 
-  if (life.age >= life.illnessUntil && random() < annualIllnessRate(age) * elapsed) {
+  if (life.age >= life.illnessUntil && !hasRecentEvent(life, "hazard-illness", 10) && random() < annualIllnessRate(age) * elapsed) {
     life.illnessUntil = life.age + 0.2 + random() * 1.1;
     life.health = "体調不良";
-    appendEvent(life, "しばらく体調を崩した。休養を取り、家族がそばで看病してくれた。", "world", "病気");
+    appendEvent(life, "しばらく体調を崩した。休養を取り、家族がそばで看病してくれた。", "world", "病気", "hazard-illness");
   } else if (life.health !== "健やか" && life.age >= life.illnessUntil) {
     life.health = "健やか";
     appendEvent(life, "休養が実り、体調が戻った。", "life", "回復");
@@ -496,6 +544,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
     if (elapsed > 0) {
       life.age += elapsed;
       remaining -= elapsed;
+      advanceOccupation(life, elapsed);
       resolveHazards(life, elapsed, random);
       if (!life.active) break;
     }
@@ -512,8 +561,8 @@ export function advanceLife(life, humanYears, random = Math.random) {
       break;
     }
     if (life.age >= life.nextLogAt) {
-      const event = ordinaryEvent(life, random);
-      newEvents.push(appendEvent(life, event.text, event.kind, event.label));
+      const event = selectRoutineEvent(life, random);
+      if (event) newEvents.push(appendEvent(life, event.text, event.kind, event.label, event.id));
       scheduleLog(life, random);
       continue;
     }
