@@ -86,8 +86,63 @@ const OCCUPATION_RANKS = [
   { skill: 40, name: "一人前" },
   { skill: 60, name: "熟練" },
   { skill: 80, name: "達人" },
-  { skill: 95, name: "巨匠級" },
+  { skill: 100, name: "巨匠級" },
 ];
+
+const TALENT_FACTORS = Object.freeze({
+  苦手: 0.65,
+  "やや苦手": 0.85,
+  普通: 1,
+  得意: 1.25,
+  天才: 1.6,
+  規格外: 2,
+});
+
+const RACE_SKILL_FACTORS = Object.freeze({
+  beastkin: { combat: 1.2, hunting: 1.2 },
+  dwarf: { smithing: 1.25, finework: 1.25 },
+  demon: { magic: 1.2, curse: 1.2 },
+  elf: { magic: 1.2, archery: 1.2 },
+  dragon: { flight: 1.25, dragon: 1.25 },
+  vampire: { stealth: 1.2, charm: 1.2 },
+});
+
+const RACE_AGE_MULTIPLIERS = Object.freeze({
+  human: 1,
+  beastkin: 1,
+  demon: 2,
+  dwarf: 2,
+  elf: 5,
+  vampire: 5,
+  dragon: 10,
+});
+
+const OCCUPATION_SKILLS = Object.freeze({
+  "まだ幼い子ども": "general",
+  "家業の手伝い": "manual",
+  "農作業": "farming",
+  "服飾店の見習い": "tailoring",
+  "職人見習い": "craft",
+  "兵士": "combat",
+  "商人": "trade",
+  "冒険者": "adventuring",
+  "教師": "teaching",
+  "魔術師": "magic",
+  "工房主": "craft",
+  "引退": "general",
+  "狩りを覚える": "hunting",
+  "巣の外を探検する": "flight",
+  "縄張りを見回る": "dragon",
+});
+
+const SKILL_IDS = [...new Set([
+  ...Object.values(OCCUPATION_SKILLS),
+  "magic", "curse", "smithing", "finework", "hunting", "archery",
+  "flight", "dragon", "stealth", "charm", "literacy",
+])];
+
+const SKILL_GROWTH_BASE = 3.5;
+const SKILL_MONTH = 1 / 12;
 
 const defineEvent = (id, category, requirements, text, effect, weight = 1) => ({
   id, category, requirements: { minAge: 0, ...requirements }, text, effect, weight,
@@ -255,6 +310,17 @@ export function createLife(random = Math.random) {
     gold: parents.gold,
     debt: parents.debt,
     magic: 0,
+    skills: Object.fromEntries(SKILL_IDS.map((skill) => [skill, 0])),
+    skillTalents: Object.fromEntries(SKILL_IDS.map((skill) => [skill, "普通"])),
+    skillPractice: {},
+    skillMonthProgress: 0,
+    skillHistory: [],
+    educationStatus: "未就学",
+    school: null,
+    mentor: null,
+    trainingSkill: null,
+    careerHistory: [],
+    npcs: [],
     health,
     fame: 0,
     occupation: "まだ幼い子ども",
@@ -318,6 +384,153 @@ function addFlag(life, flag) {
   if (flag && !life.historyFlags.includes(flag)) life.historyFlags.push(flag);
 }
 
+function ensureSkillState(life) {
+  if (!life.skills) {
+    life.skills = Object.fromEntries(SKILL_IDS.map((skill) => [skill, 0]));
+    const currentSkill = OCCUPATION_SKILLS[life.occupation] ?? "general";
+    life.skills[currentSkill] = life.occupationSkill ?? 0;
+  }
+  for (const skill of SKILL_IDS) {
+    if (typeof life.skills[skill] !== "number") life.skills[skill] = 0;
+  }
+  life.skillTalents ??= Object.fromEntries(SKILL_IDS.map((skill) => [skill, "普通"]));
+  life.skillPractice ??= {};
+  life.skillHistory ??= [];
+  life.skillMonthProgress ??= 0;
+  return life.skills;
+}
+
+function rankForSkill(skill) {
+  return [...OCCUPATION_RANKS].reverse().find((rank) => skill >= rank.skill)?.name ?? "初心者";
+}
+
+function syncOccupationSkill(life) {
+  const skills = ensureSkillState(life);
+  life.occupationSkill = skills[OCCUPATION_SKILLS[life.occupation] ?? "general"] ?? 0;
+}
+
+function addSkillPoints(life, skill, amount, source = "出来事") {
+  const skills = ensureSkillState(life);
+  const before = skills[skill] ?? 0;
+  skills[skill] = Math.max(0, before + amount);
+  if (skills[skill] !== before) {
+    life.skillHistory.push({ skill, age: life.age, from: before, to: skills[skill], source });
+  }
+  if (skill === (OCCUPATION_SKILLS[life.occupation] ?? "general")) {
+    syncOccupationSkill(life);
+    updateOccupationRank(life);
+  }
+}
+
+function registerNPC(life, random, relationship, occupation) {
+  life.npcs ??= [];
+  const existing = life.npcs.find((npc) => npc.relationship === relationship && npc.alive);
+  if (existing) return existing;
+  const npc = {
+    id: `npc-${life.npcs.length + 1}`,
+    name: `${randomItem(GIVEN_NAMES[life.race.id] ?? GIVEN_NAMES.human, random)}・${randomItem(SURNAMES, random)}`,
+    race: life.race.id,
+    age: Math.floor(life.age * (life.race.multiplier ?? 1) + 20),
+    gender: randomItem(GENDERS, random),
+    occupation,
+    location: life.home,
+    personality: randomItem(PERSONALITIES, random),
+    wealth: 0,
+    health: "健やか",
+    relationship,
+    affinity: 50,
+    maritalStatus: "未婚",
+    alive: true,
+  };
+  life.npcs.push(npc);
+  return npc;
+}
+
+function setSkillPractice(life, skill, activity, learning) {
+  life.skillPractice ??= {};
+  life.skillPractice[skill] = { activity, learning };
+}
+
+export function skillGrowthDelta(skill, activity, talent, race, learning, deltaHumanYears) {
+  const level = Math.max(0, skill);
+  const talentFactor = typeof talent === "number" ? talent : TALENT_FACTORS[talent] ?? 1;
+  return SKILL_GROWTH_BASE * activity * talentFactor * race * learning
+    * (1 / (1 + (level / 80) ** 1.5)) * deltaHumanYears;
+}
+
+export function skillTier(skill) {
+  if (skill >= 100) return "巨匠級";
+  if (skill >= 80) return "達人";
+  if (skill >= 60) return "熟練";
+  if (skill >= 40) return "一人前";
+  if (skill >= 20) return "見習い";
+  return "初心者";
+}
+
+function skillGrowthPlans(life) {
+  const plans = new Map();
+  const occupationSkill = OCCUPATION_SKILLS[life.occupation];
+  if (life.age >= 13 && occupationSkill && !["まだ幼い子ども", "引退"].includes(life.occupation)) {
+    plans.set(occupationSkill, { activity: 1, learning: 1 });
+  }
+  for (const [skill, practice] of Object.entries(life.skillPractice ?? {})) {
+    if (practice.activity > 0) plans.set(skill, practice);
+  }
+  return plans;
+}
+
+function updateOccupationRank(life) {
+  syncOccupationSkill(life);
+  const rank = rankForSkill(life.occupationSkill);
+  if (rank === life.occupationRank) return;
+  const previousRank = life.occupationRank;
+  life.occupationRank = rank;
+  appendEvent(
+    life,
+    `${occupationTitle(life)}としての技能が${previousRank}から${rank}へ成長した。勤続年数は${Math.floor(life.occupationYears)}年。`,
+    "life",
+    "技能の成長",
+    `occupation-rank-${life.occupation}-${rank}`,
+  );
+}
+
+export function advanceSkills(life, humanYears) {
+  if (humanYears <= 0) return;
+  const skills = ensureSkillState(life);
+  const accumulatedMonths = (life.skillMonthProgress ?? 0) + humanYears * 12;
+  const completeMonths = Math.floor(accumulatedMonths + Number.EPSILON);
+  life.skillMonthProgress = accumulatedMonths - completeMonths;
+  const plans = skillGrowthPlans(life);
+  const raceFactor = RACE_SKILL_FACTORS[life.race?.id] ?? {};
+  const ageMultiplier = RACE_AGE_MULTIPLIERS[life.race?.id] ?? life.race?.multiplier ?? 1;
+  const startingSkills = new Map([...plans.keys()].map((skill) => [skill, skills[skill] ?? 0]));
+
+  for (let month = 0; month < completeMonths; month += 1) {
+    for (const [skill, plan] of plans) {
+      const before = skills[skill] ?? 0;
+      const talent = life.skillTalents[skill] ?? "普通";
+      const deltaActualYears = SKILL_MONTH * (life.race?.multiplier ?? 1);
+      skills[skill] = before + skillGrowthDelta(
+        before,
+        plan.activity,
+        talent,
+        raceFactor[skill] ?? 1,
+        plan.learning,
+        deltaActualYears / ageMultiplier,
+      );
+    }
+  }
+  if (completeMonths > 0) {
+    for (const [skill, before] of startingSkills) {
+      const after = skills[skill] ?? 0;
+      if (after !== before) {
+        life.skillHistory.push({ skill, age: life.age, from: before, to: after, source: "通常勤務・訓練" });
+      }
+    }
+    updateOccupationRank(life);
+  }
+}
+
 function addRelationship(life, type) {
   if (!life.relationships.some((relationship) => relationship.type === type)) {
     life.relationships.push({ type, since: life.age });
@@ -329,30 +542,46 @@ export function applyRoutineEffect(life, event, random = Math.random) {
   life.gold = Math.max(0, life.gold + (effect.gold ?? 0));
   life.debt = Math.max(0, life.debt + (effect.debt ?? 0));
   life.fame = Math.max(0, life.fame + (effect.fame ?? 0));
-  life.occupationSkill = clamp(life.occupationSkill + (effect.skill ?? 0), 0, 100);
+  if (effect.skill) {
+    const skill = event.category === "魔法・種族固有" ? "magic"
+      : event.category === "幼少期・教育" ? "literacy"
+        : OCCUPATION_SKILLS[life.occupation] ?? "general";
+    addSkillPoints(life, skill, effect.skill, event.category);
+  }
   life.magic = clamp((life.magic ?? 0) + (effect.magic ?? 0), 0, 100);
+  if (event.id === "child-school-entry") {
+    life.educationStatus = "学校で学習中";
+    life.school = { id: "local-school", name: "町の教室" };
+    setSkillPractice(life, "literacy", 0.5, 1.6);
+  }
+  if (event.id === "magic-first-spark") life.educationStatus = "魔術の適性あり";
   if (effect.health) {
     life.health = effect.health;
     life.illnessUntil = effect.health === "健やか" ? life.age : life.age + 0.5 + random();
   }
   if (effect.relation) addRelationship(life, effect.relation);
+  if (event.id === "love-first-meeting") {
+    const partner = registerNPC(life, random, "恋愛相手", "市の商人");
+    life.romanticPartnerId = partner.id;
+    life.relationships.push({ type: "romance", npcId: partner.id, since: life.age });
+  }
   addFlag(life, effect.flag);
 
   switch (effect.action) {
     case "start-work":
-      changeOccupation(life, pickCareer(life, random));
+      changeOccupation(life, pickCareer(life, random), "家族の紹介で就職");
       life.gold += 4;
       break;
     case "career-change":
-      changeOccupation(life, randomItem(["商人", "教師", "職人見習い"], random));
+      changeOccupation(life, randomItem(["商人", "教師", "職人見習い"], random), "職業イベントによる転職");
       break;
     case "retire":
       life.retiredOccupation = life.occupation;
-      life.occupation = "引退";
+      changeOccupation(life, "引退", "引退");
       break;
     case "open-workshop":
-      life.occupation = "工房主";
-      life.occupationRank = "独立";
+      changeOccupation(life, "工房主", "工房を開業");
+      life.occupationRank = rankForSkill(life.occupationSkill);
       break;
     case "buy-home":
       life.ownsHome = true;
@@ -396,28 +625,27 @@ function pickCareer(life, random) {
   return randomItem(eligible, random);
 }
 
-function changeOccupation(life, occupation) {
+function changeOccupation(life, occupation, reason = "就職・転職") {
   if (life.occupation === occupation) return;
+  ensureSkillState(life);
+  const previous = life.occupation;
+  life.careerHistory ??= [];
+  life.careerHistory.push({ from: previous, to: occupation, age: life.age, reason });
   life.occupation = occupation;
-  life.occupationSkill = 0;
   life.occupationYears = 0;
-  life.occupationRank = OCCUPATION_RANKS[0].name;
+  syncOccupationSkill(life);
+  life.occupationRank = rankForSkill(life.occupationSkill);
 }
 
 function advanceOccupation(life, elapsed) {
   if (life.age < 13 || ["まだ幼い子ども", "引退"].includes(life.occupation) || elapsed <= 0) return;
   life.occupationYears += elapsed;
-  life.occupationSkill = clamp(life.occupationSkill + elapsed * 1.2, 0, 100);
-  const rank = [...OCCUPATION_RANKS].reverse().find((item) => life.occupationSkill >= item.skill);
-  if (rank.name === life.occupationRank) return;
-  life.occupationRank = rank.name;
-  const eventId = `occupation-rank-${life.occupation}-${rank.skill}`;
-  appendEvent(life, `${occupationTitle(life)}として${life.occupationRank}の腕前に達し、勤続${Math.floor(life.occupationYears)}年の成果を認められた。`, "life", "仕事の成長", eventId);
+  syncOccupationSkill(life);
 }
 
 export function occupationTitle(life) {
   if (life.occupation === "職人見習い" || life.occupation === "服飾店の見習い") {
-    if (life.occupationSkill >= 95) return "工房主";
+    if (life.occupationSkill >= 100) return "工房主";
     if (life.occupationSkill >= 80) return "親方";
     if (life.occupationSkill >= 60) return "熟練職人";
     if (life.occupationSkill >= 40) return "一人前の職人";
@@ -443,7 +671,7 @@ export const CHOICE_EVENTS = [
   },
   {
     id: "choice-guild-exam", title: "組合の昇級試験", category: "職業・昇進", weight: 1,
-    requirements: { minAge: 18, minimumSkill: 25, occupations: ["職人見習い", "服飾店の見習い"] },
+    requirements: { minAge: 18, minimumGold: 5, minimumSkill: 25, occupations: ["職人見習い", "服飾店の見習い"] },
     copy: "組合から技能試験の案内が届いた。受験料を払って資格に挑戦するか、実務経験を積むか。",
     choices: [{ label: "受験料5Gを払い、試験に挑む", effect: "guild-exam" }, { label: "仕事を続けて腕を磨く", effect: "decline-exam" }],
   },
@@ -479,13 +707,13 @@ export const CHOICE_EVENTS = [
   },
   {
     id: "choice-medical-care", title: "長引く体調不良", category: "病気・事故", weight: 0.7,
-    requirements: { minAge: 16, healthStates: ["療養中", "回復中"] },
+    requirements: { minAge: 16, minimumGold: 6, healthStates: ["療養中", "回復中"] },
     copy: "休んでも体調が戻らない。高価な薬を試すか、仕事を休んで静養を続けるか。",
     choices: [{ label: "薬代6Gを払い、治療を受ける", effect: "medical-treatment" }, { label: "仕事を休み、静養する", effect: "rest" }],
   },
   {
     id: "choice-magic-training", title: "魔法の師との出会い", category: "魔法・種族固有", weight: 0.8,
-    requirements: { minAge: 12, requiresFlag: "awakened-magic" },
+    requirements: { minAge: 12, minimumGold: 7, requiresFlag: "awakened-magic" },
     copy: "魔法の師が本格的な訓練を勧めている。時間と授業料を使って学ぶか、独学を続けるか。",
     choices: [{ label: "授業料7Gを払い、師に学ぶ", effect: "train-magic" }, { label: "今は独学で練習する", effect: "self-study-magic" }],
   },
@@ -602,6 +830,14 @@ export function applyChoice(life, choice, random = Math.random) {
   const selected = decision.choices.find((item) => item.effect === choice.effect);
   if (!selected) return null;
 
+  ensureSkillState(life);
+  const before = {
+    gold: life.gold,
+    health: life.health,
+    fame: life.fame,
+    occupation: life.occupation,
+    skills: { ...life.skills },
+  };
   let message;
   switch (selected.effect) {
     case "help":
@@ -635,21 +871,27 @@ export function applyChoice(life, choice, random = Math.random) {
     case "study":
       life.fame += 1;
       addFlag(life, "continued-education");
+      life.educationStatus = "学習継続中";
+      if (life.age < 13) life.school ??= { id: "home-study", name: "家庭学習" };
+      setSkillPractice(life, "literacy", 0.5, life.school?.id === "local-school" ? 1.6 : 0.6);
       message = "学びを続け、新しい知識を身につけた。";
       break;
     case "work":
       life.gold += 2;
-      if (life.occupation !== "まだ幼い子ども") life.occupationSkill = clamp(life.occupationSkill + 2, 0, 100);
+      addSkillPoints(life, life.occupation === "まだ幼い子ども"
+        ? "manual"
+        : OCCUPATION_SKILLS[life.occupation] ?? "manual", 2, "家業の手伝い");
       addFlag(life, "helped-family-work");
       message = "家の仕事を手伝い、暮らしを支えた。";
       break;
     case "apprentice":
-      changeOccupation(life, pickCareer(life, random));
+      changeOccupation(life, pickCareer(life, random), "本人が見習いを選択");
+      life.educationStatus = "職人修行中";
       message = `${life.occupation}として見習いを始めた。`;
       life.gold += 4;
       break;
     case "career":
-      changeOccupation(life, pickCareer(life, random));
+      changeOccupation(life, pickCareer(life, random), "本人が就職・転職を選択");
       life.gold += 8 + Math.floor(random() * 8);
       life.fame += 1;
       message = `${life.occupation}の仕事を始め、新しい一歩を踏み出した。`;
@@ -662,7 +904,7 @@ export function applyChoice(life, choice, random = Math.random) {
       if (life.gold >= 5) {
         life.gold -= 5;
         life.fame += 2;
-        life.occupationSkill = clamp(life.occupationSkill + 5, 0, 100);
+        addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 5, "道具への投資");
         addFlag(life, "invested-in-tools");
         message = "仕事道具を新調した。仕事の幅が広がりそうだ。";
       } else {
@@ -684,10 +926,10 @@ export function applyChoice(life, choice, random = Math.random) {
       if (random() < successChance) {
         life.gold += 20;
         life.fame += 5;
-        life.occupationSkill = clamp(life.occupationSkill + 3, 0, 100);
+        addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 3, "魔鉱石の加工");
         message = "魔鉱石の加工に成功した。報酬20Gを受け取り、職人技能と評判が上がった。";
       } else {
-        life.occupationSkill = clamp(life.occupationSkill + 1, 0, 100);
+        addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 1, "加工の失敗から学習");
         message = "加工に失敗し材料費を失ったが、難しい鉱石の扱いを学んだ。";
       }
       addFlag(life, "ore-contract-attempted");
@@ -700,7 +942,7 @@ export function applyChoice(life, choice, random = Math.random) {
       life.gold -= 5;
       if (random() < clamp(life.occupationSkill / 100, 0.15, 0.9)) {
         life.fame += 4;
-        life.occupationSkill = clamp(life.occupationSkill + 4, 0, 100);
+        addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 4, "組合試験");
         message = "組合の技能試験に合格し、資格と仕事仲間からの信頼を得た。";
         addFlag(life, "guild-license");
       } else {
@@ -708,7 +950,7 @@ export function applyChoice(life, choice, random = Math.random) {
       }
       break;
     case "decline-exam":
-      life.occupationSkill = clamp(life.occupationSkill + 1, 0, 100);
+      addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 1, "実務経験");
       message = "試験を急がず仕事を続け、実地で経験を積むことにした。";
       break;
     case "borrow-for-trade":
@@ -735,6 +977,10 @@ export function applyChoice(life, choice, random = Math.random) {
       break;
     case "commit-romance":
       addFlag(life, "committed-relationship");
+      {
+        const partner = life.npcs?.find((npc) => npc.id === life.romanticPartnerId);
+        if (partner) partner.affinity = Math.min(100, partner.affinity + 20);
+      }
       life.fame += 1;
       message = "気持ちを伝え、相手も同じ思いだと分かった。二人は将来を約束した。";
       break;
@@ -743,7 +989,16 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "告白はせず、相手と変わらない友人関係を続けることにした。";
       break;
     case "marry":
-      life.spouse = `${randomItem(GIVEN_NAMES[life.race.id], random)}・${randomItem(SURNAMES, random)}`;
+      {
+        const partner = life.npcs?.find((npc) => npc.id === life.romanticPartnerId);
+        if (partner) {
+          partner.maritalStatus = "既婚";
+          partner.affinity = Math.min(100, partner.affinity + 15);
+          life.spouse = partner.name;
+        } else {
+          life.spouse = `${randomItem(GIVEN_NAMES[life.race.id], random)}・${randomItem(SURNAMES, random)}`;
+        }
+      }
       life.familyCount += 1;
       addFlag(life, "married");
       addRelationship(life, "spouse");
@@ -763,12 +1018,24 @@ export function applyChoice(life, choice, random = Math.random) {
     case "train-magic":
       life.gold -= 7;
       life.magic = clamp(life.magic + 5, 0, 100);
-      life.occupationSkill = clamp(life.occupationSkill + 1, 0, 100);
+      addSkillPoints(life, "magic", 1, "師匠との初回訓練");
+      {
+        const mentor = registerNPC(life, random, "魔術の師匠", "魔術師");
+        life.mentor = mentor.id;
+        life.trainingSkill = "magic";
+        life.educationStatus = "魔術修行中";
+        setSkillPractice(life, "magic", 0.5, 1.4);
+        life.relationships.push({ type: "mentor", npcId: mentor.id, since: life.age });
+      }
       addFlag(life, "trained-magic");
       message = "師のもとで魔法を学び、魔力を安全に扱う技術を身につけた。";
       break;
     case "self-study-magic":
       life.magic = clamp(life.magic + 2, 0, 100);
+      life.trainingSkill = "magic";
+      life.educationStatus = "魔術を独学中";
+      setSkillPractice(life, "magic", 0.5, 0.6);
+      addSkillPoints(life, "magic", 1, "魔術の独学");
       addFlag(life, "self-studied-magic");
       message = "独学で魔法の練習を続け、少しずつ制御を覚えた。";
       break;
@@ -809,6 +1076,18 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "穏やかな日々を大切にすることにした。";
   }
   life.gold = Math.max(0, life.gold);
+  const changes = [];
+  const goldDelta = life.gold - before.gold;
+  if (goldDelta) changes.push(`所持金${goldDelta > 0 ? "+" : ""}${goldDelta}G`);
+  const fameDelta = life.fame - before.fame;
+  if (fameDelta) changes.push(`名声${fameDelta > 0 ? "+" : ""}${fameDelta}`);
+  if (life.health !== before.health) changes.push(`健康${before.health}→${life.health}`);
+  if (life.occupation !== before.occupation) changes.push(`職業${before.occupation}→${life.occupation}`);
+  for (const [skill, level] of Object.entries(life.skills)) {
+    const delta = level - (before.skills[skill] ?? 0);
+    if (delta) changes.push(`${skill}技能+${delta.toFixed(1)}`);
+  }
+  if (changes.length) message = `${message}（${changes.join("、")}）`;
   life.pendingDecision = null;
   life.playing = true;
   appendEvent(life, message, "life", "選択", `${decision.id}-result`);
@@ -889,6 +1168,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       life.age += elapsed;
       remaining -= elapsed;
       advanceOccupation(life, elapsed);
+      advanceSkills(life, elapsed);
       resolveHazards(life, elapsed, random);
       if (!life.active) break;
     }

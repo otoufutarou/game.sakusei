@@ -5,6 +5,7 @@ import {
   RACES,
   ROUTINE_EVENTS,
   TUNING,
+  advanceSkills,
   availableChoiceEvents,
   actualAge,
   advanceLife,
@@ -12,6 +13,8 @@ import {
   applyRoutineEffect,
   createLife,
   isRoutineEventEligible,
+  skillGrowthDelta,
+  skillTier,
   routineLogMean,
   selectRoutineEvent,
 } from "./simulation.js";
@@ -183,6 +186,115 @@ test("declining the ore contract costs nothing", () => {
   applyChoice(life, { effect: "decline-contract" }, () => 0.5);
   assert.equal(life.gold, 20);
   assert.equal(life.fame, 0);
+});
+
+test("monthly skill growth matches the specified human-year targets", () => {
+  const expected = [[10, 32], [20, 57], [30, 76], [50, 108]];
+  for (const [years, target] of expected) {
+    const life = makeLife({
+      age: 20,
+      occupation: "教師",
+      occupationSkill: 0,
+      occupationRank: "初心者",
+      occupationYears: 0,
+      skills: { teaching: 0 },
+      skillTalents: { teaching: "普通" },
+      skillPractice: {},
+      skillMonthProgress: 0,
+      skillHistory: [],
+    });
+    advanceSkills(life, years);
+    assert.ok(Math.abs(life.skills.teaching - target) < 1, `${years} years: ${life.skills.teaching}`);
+    assert.equal(life.occupationSkill, life.skills.teaching);
+  }
+});
+
+test("skills progress during a month even without a scheduled life-log event", () => {
+  const life = makeLife({
+    age: 20,
+    occupation: "教師",
+    occupationSkill: 0,
+    occupationRank: "初心者",
+    skills: { teaching: 0 },
+    skillTalents: { teaching: "普通" },
+    skillPractice: {},
+    skillMonthProgress: 0,
+    skillHistory: [],
+  });
+  const journalLength = life.journal.length;
+  advanceSkills(life, 1 / 12);
+  assert.ok(life.skills.teaching > 0);
+  assert.equal(life.journal.length, journalLength);
+});
+
+test("skill formula honors aptitude, species, activity, and learning factors", () => {
+  const ordinaryMonthlyGain = skillGrowthDelta(0, 1, "普通", 1, 1, 1 / 12);
+  assert.ok(Math.abs(ordinaryMonthlyGain - 3.5 / 12) < Number.EPSILON);
+  assert.ok(Math.abs(skillGrowthDelta(0, 1, "得意", 1, 1, 1 / 12) - ordinaryMonthlyGain * 1.25) < Number.EPSILON);
+  assert.ok(Math.abs(skillGrowthDelta(0, 1, "普通", 1.2, 1, 1 / 12) - ordinaryMonthlyGain * 1.2) < Number.EPSILON);
+  assert.ok(Math.abs(skillGrowthDelta(0, 0.5, "普通", 1, 1.4, 1 / 12) - ordinaryMonthlyGain * 0.7) < Number.EPSILON);
+  assert.ok(skillGrowthDelta(80, 1, "普通", 1, 1, 1 / 12) < ordinaryMonthlyGain);
+});
+
+test("skill tiers follow the specified ranges and remain separate from tenure", () => {
+  assert.deepEqual([0, 19, 20, 39, 40, 59, 60, 79, 80, 99, 100].map(skillTier), [
+    "初心者", "初心者", "見習い", "見習い", "一人前", "一人前", "熟練", "熟練", "達人", "達人", "巨匠級",
+  ]);
+  const life = makeLife({ occupation: "教師", occupationSkill: 30, occupationYears: 21 });
+  life.skills = { teaching: 30 };
+  life.skillTalents = { teaching: "普通" };
+  life.skillPractice = {};
+  life.skillMonthProgress = 0;
+  advanceSkills(life, 1);
+  assert.equal(life.occupationYears, 21);
+  assert.ok(life.occupationSkill > 30);
+  assert.equal(life.occupationRank, skillTier(life.occupationSkill));
+});
+
+test("changing careers preserves learned skills and records the transition reason", () => {
+  const life = makeLife({
+    occupation: "職人見習い",
+    occupationSkill: 42,
+    skills: { craft: 42, magic: 8 },
+    skillTalents: { craft: "普通", magic: "普通" },
+    skillPractice: {},
+    careerHistory: [],
+    pendingDecision: { id: "career-choice", choices: [{ effect: "career" }] },
+  });
+  applyChoice(life, { effect: "career" }, () => 0);
+  assert.equal(life.occupation, "家業の手伝い");
+  assert.equal(life.skills.craft, 42);
+  assert.equal(life.skills.magic, 8);
+  assert.equal(life.careerHistory.at(-1).from, "職人見習い");
+  assert.equal(life.careerHistory.at(-1).to, "家業の手伝い");
+  assert.match(life.careerHistory.at(-1).reason, /本人/);
+});
+
+test("choosing a magic mentor creates a persistent contact and ongoing skill practice", () => {
+  const life = makeLife({
+    age: 20,
+    gold: 30,
+    occupation: "教師",
+    occupationSkill: 12,
+    skills: { teaching: 12, magic: 0 },
+    skillTalents: { teaching: "普通", magic: "普通" },
+    skillPractice: {},
+    npcs: [],
+    relationships: [],
+    pendingDecision: { id: "magic-training", choices: [{ effect: "train-magic" }] },
+  });
+  const previousOccupation = life.occupation;
+  applyChoice(life, { effect: "train-magic" }, seededRandom(42));
+  assert.equal(life.gold, 23);
+  assert.equal(life.occupation, previousOccupation);
+  assert.equal(life.educationStatus, "魔術修行中");
+  assert.equal(life.trainingSkill, "magic");
+  assert.deepEqual(life.skillPractice.magic, { activity: 0.5, learning: 1.4 });
+  assert.equal(life.npcs.length, 1);
+  assert.equal(life.mentor, life.npcs[0].id);
+  assert.equal(life.npcs[0].relationship, "魔術の師匠");
+  assert.equal(life.npcs[0].alive, true);
+  assert.ok(life.skills.magic > 0);
 });
 
 test("species lifespan and event density scale with the human-equivalent lifespan", () => {
