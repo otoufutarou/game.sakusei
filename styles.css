@@ -296,7 +296,8 @@ button:focus-visible, a:focus-visible { outline-color: var(--accent); }
 .character-scene {
   position: relative;
   grid-column: 1 / -1;
-  min-height: 90px;
+  min-height: 100px;
+  max-height: 130px;
   height: auto;
   overflow: hidden;
   margin: 0;
@@ -501,7 +502,7 @@ button:focus-visible, a:focus-visible { outline-color: var(--accent); }
   .intro h1 { font-size: 13px; }
   .chapter-mark { gap: 4px; font-size: 7px; }
   .chapter-mark strong { font-size: 16px; }
-  .game-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.08fr) minmax(0, .92fr); gap: 7px; }
+  .game-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, .75fr); gap: 7px; }
   .character-panel { padding: 8px 10px; gap: 4px 8px; grid-template-rows: auto minmax(82px, 1fr) auto auto auto; }
   .character-scene { min-height: 82px; }
   .identity h3 { font-size: 13px; }
