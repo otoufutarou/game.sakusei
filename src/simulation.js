@@ -9,11 +9,11 @@ export const RACES = [
 ];
 
 const NATIONS = [
-  { name: "ルヴェンティル王国", population: 30, native: { human: 75, beastkin: 15, dwarf: 5, demon: 3, elf: 2 }, slaves: true },
-  { name: "ヴェルグ帝国", population: 30, native: { human: 65, beastkin: 20, dwarf: 5, demon: 8, elf: 2 }, slaves: true },
-  { name: "セレフィア森林国", population: 15, native: { dwarf: 3, demon: 2, elf: 95 }, slaves: false },
-  { name: "グランツ山岳連邦", population: 15, native: { dwarf: 90, demon: 4, elf: 6 }, slaves: false },
-  { name: "ザルヴェディア魔族領", population: 10, native: { dwarf: 4, demon: 90, elf: 6 }, slaves: true },
+  { id: "kingdom", name: "ルヴェンティル王国", population: 30, native: { human: 75, beastkin: 15, dwarf: 5, demon: 3, elf: 2 }, slaves: true },
+  { id: "empire", name: "ヴェルグ帝国", population: 30, native: { human: 65, beastkin: 20, dwarf: 5, demon: 8, elf: 2 }, slaves: true },
+  { id: "forest", name: "セレフィア森林国", population: 15, native: { dwarf: 3, demon: 2, elf: 95 }, slaves: false },
+  { id: "mountain", name: "グランツ山岳連邦", population: 15, native: { dwarf: 90, demon: 4, elf: 6 }, slaves: false },
+  { id: "demon-realm", name: "ザルヴェディア魔族領", population: 10, native: { dwarf: 4, demon: 90, elf: 6 }, slaves: true },
 ];
 
 const STATUS_OPTIONS = [
@@ -45,8 +45,7 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
-  // Decision prompts and outcomes add roughly 0.5 journal entries per year.
-  logEventsPerHumanYear: 3,
+  routineLogIntervalYears: 1,
   decisionMeanYears: 4,
   firstDecisionEarliestAge: 13,
   minorIllnessChanceByAge: [
@@ -81,9 +80,72 @@ const AGE_DEATH_RATES = [
   { until: 119, rate: 0.25 },
 ];
 
+const OCCUPATION_RANKS = [
+  { skill: 0, name: "初心者" },
+  { skill: 20, name: "見習い" },
+  { skill: 40, name: "一人前" },
+  { skill: 60, name: "熟練" },
+  { skill: 80, name: "達人" },
+  { skill: 95, name: "巨匠級" },
+];
+
+export const ROUTINE_EVENTS = [
+  { id: "market-season", category: "日常生活", minAge: 6, cooldownYears: 6, text: (life) => `${life.home}の市で季節の品が並び、近所の人とささやかな話を交わした。` },
+  { id: "community-help", category: "日常生活", minAge: 6, cooldownYears: 7, text: () => "近所の人たちと力を合わせ、嵐で傷んだ共同井戸を直した。" },
+  { id: "old-friend", category: "友情・人間関係", minAge: 13, cooldownYears: 10, text: () => "昔からの友人と久しぶりに会い、互いの近況を語り合った。" },
+  { id: "local-festival", category: "日常生活", minAge: 6, cooldownYears: 8, text: () => "町の祭りを手伝い、普段は話さない人とも笑顔を交わした。" },
+  { id: "seasonal-work", category: "仕事・昇進", minAge: 13, cooldownYears: 6, occupations: ["農作業", "家業の手伝い"], text: () => "季節の収穫を手伝い、仕事仲間と分け合う食事を楽しんだ。" },
+  { id: "craft-order", category: "仕事・昇進", minAge: 13, cooldownYears: 8, occupations: ["職人見習い", "服飾店の見習い"], text: () => "少し難しい注文を任され、仕上げた品を親方に認められた。" },
+  { id: "trade-opportunity", category: "財産・借金", minAge: 18, cooldownYears: 9, minimumGold: 20, text: (life) => `蓄えを生かして${life.nation.name}の市で品を仕入れ、少し利益を得た。` },
+  { id: "workplace-mentor", category: "仕事・昇進", minAge: 18, cooldownYears: 8, minimumSkill: 20, text: () => "仕事の経験を買われ、後輩に道具の扱いを教える機会を得た。" },
+  { id: "skilled-work", category: "仕事・昇進", minAge: 18, cooldownYears: 10, minimumSkill: 60, text: () => "長年磨いた技が評判となり、遠方からも仕事の依頼が届いた。" },
+  { id: "healing-rest", category: "病気・事故", minAge: 18, cooldownYears: 12, text: () => "疲れが重なって体調を崩したが、仕事を休んで療養し、回復した。" },
+  { id: "human-mage", category: "魔法・魔物", raceIds: ["human"], minAge: 6, cooldownYears: 10, text: () => "魔力の気配に気づいた町の魔術師から、簡単な術を教わる機会を得た。" },
+  { id: "beastkin-senses", category: "種族固有", raceIds: ["beastkin"], minAge: 6, cooldownYears: 8, text: () => "鋭い嗅覚で森道の異変に気づき、通りかかった旅人を危険から遠ざけた。" },
+  { id: "beastkin-hunt", category: "種族固有", raceIds: ["beastkin"], minAge: 13, cooldownYears: 10, text: () => "狩りで身軽さを発揮し、村の食卓に新鮮な獲物を持ち帰った。" },
+  { id: "dwarf-forge", category: "種族固有", raceIds: ["dwarf"], minAge: 13, cooldownYears: 9, text: () => "鍛冶場で初めて熱した金属を扱い、氏族の職人から手際を褒められた。" },
+  { id: "dwarf-vein", category: "種族固有", raceIds: ["dwarf"], minAge: 18, cooldownYears: 12, text: () => "山道の岩肌から新しい鉱脈の兆しを見つけ、採掘仲間に知らせた。" },
+  { id: "demon-horns", category: "種族固有", raceIds: ["demon"], minAge: 6, maxAge: 24, cooldownYears: 10, text: () => "角の先に魔力が宿り、淡い光が灯った。家族は一族の成長を祝った。" },
+  { id: "demon-magic", category: "種族固有", raceIds: ["demon"], minAge: 13, cooldownYears: 10, text: () => "魔力が思いがけずあふれて家財を揺らしたが、家族と練習して制御を覚えた。" },
+  { id: "demon-recruit", category: "種族固有", raceIds: ["demon"], nationIds: ["empire", "demon-realm"], minAge: 18, cooldownYears: 14, text: () => "軍の魔術部隊から勧誘を受け、自分の力をどこで生かすか考えた。" },
+  { id: "elf-spirit", category: "種族固有", raceIds: ["elf"], minAge: 13, cooldownYears: 12, text: () => "森の精霊の光が弱まっていることに気づき、長老と原因を探った。" },
+  { id: "elf-reunion", category: "種族固有", raceIds: ["elf"], minAge: 30, cooldownYears: 18, text: () => "数十年ぶりに幼なじみと再会し、変わらない森と移ろった人の世について話した。" },
+  { id: "dragon-flight", category: "種族固有", raceIds: ["dragon"], minAge: 6, maxAge: 40, cooldownYears: 12, text: () => "初めて自分の力だけで高く飛び、雲の上から広い山並みを見渡した。" },
+  { id: "dragon-hoard", category: "種族固有", raceIds: ["dragon"], minAge: 18, cooldownYears: 15, text: () => "巣を訪れた冒険者を追い返し、守り抜いた財宝を奥深くへ移した。" },
+  { id: "vampire-suspicion", category: "種族固有", raceIds: ["vampire"], minAge: 18, cooldownYears: 14, text: () => "夜にしか姿を見せないことを怪しまれたが、信頼する隣人には事情を打ち明けた。" },
+  { id: "vampire-retainer", category: "種族固有", raceIds: ["vampire"], minAge: 30, cooldownYears: 18, text: () => "長く仕えてきた眷属が自分の道を望み、互いの未来について話し合った。" },
+  { id: "kingdom-tax", category: "国家・法律", nationIds: ["kingdom"], minAge: 18, cooldownYears: 12, text: () => "領主の徴税が見直され、村人たちは新しい負担について相談した。" },
+  { id: "kingdom-court", category: "戦争・政治", nationIds: ["kingdom"], minAge: 18, cooldownYears: 15, text: () => "貴族の失脚が町の噂になり、王都の仕事や取引にも変化が広がった。" },
+  { id: "empire-draft", category: "国家・法律", nationIds: ["empire"], minAge: 18, cooldownYears: 12, text: () => "帝国の徴兵令が出され、家族や同僚と今後の暮らしを話し合った。" },
+  { id: "empire-supply", category: "戦争・政治", nationIds: ["empire"], minAge: 18, cooldownYears: 12, text: () => "軍需品の注文が増え、町の工房や商店に臨時の仕事が舞い込んだ。" },
+  { id: "forest-council", category: "国家・法律", nationIds: ["forest"], minAge: 18, cooldownYears: 12, text: () => "長老会議で森の保護が決まり、住民は採集や狩りの約束を見直した。" },
+  { id: "mountain-guild", category: "国家・法律", nationIds: ["mountain"], minAge: 13, cooldownYears: 10, text: () => "職人組合の競技会に参加し、氏族を越えた腕比べで刺激を受けた。" },
+  { id: "demon-rivalry", category: "戦争・政治", nationIds: ["demon-realm"], minAge: 18, cooldownYears: 12, text: () => "領主同士の権力争いが仕事にも影を落とし、周囲は立場を慎重に選んだ。" },
+];
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const randomItem = (items, random) => items[Math.floor(random() * items.length)];
 const rollExponential = (mean, random) => -Math.log(Math.max(Number.EPSILON, 1 - random())) * mean;
+
+export function routineLogMean(life) {
+  return TUNING.routineLogIntervalYears * life.race.multiplier;
+}
+
+export function isRoutineEventEligible(life, event, age = life.age) {
+  const requirements = event.requirements ?? event;
+  if (age < (requirements.minAge ?? 0) || age > (requirements.maxAge ?? Infinity)) return false;
+  if (requirements.raceIds && !requirements.raceIds.includes(life.race.id)) return false;
+  if (requirements.nationIds && !requirements.nationIds.includes(life.nation.id)) return false;
+  if (requirements.occupations && !requirements.occupations.includes(life.occupation)) return false;
+  if (requirements.minimumGold !== undefined && life.gold < requirements.minimumGold) return false;
+  if (requirements.minimumSkill !== undefined && life.occupationSkill < requirements.minimumSkill) return false;
+  const history = life.eventHistory ?? [];
+  if (requirements.oncePerLife && history.some((entry) => entry.id === event.id)) return false;
+  if ((life.journal ?? []).slice(-20).some((entry) => entry.id === event.id)) return false;
+  const lastOccurrence = [...history].reverse().find((entry) => entry.id === event.id);
+  if (lastOccurrence && age - lastOccurrence.age < (requirements.cooldownYears ?? 0)) return false;
+  return true;
+}
 
 function weightedPick(items, getWeight, random) {
   const total = items.reduce((sum, item) => sum + getWeight(item), 0);
