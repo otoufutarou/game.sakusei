@@ -72,8 +72,19 @@ function lifeForEvent(event) {
     occupationSkill: requirements.minimumSkill ?? 10,
     gold: Math.min(requirements.maximumGold ?? Infinity, requirements.minimumGold ?? 30),
     health: requirements.healthStates?.[0] ?? "健やか",
+    debt: requirements.custom ? 20 : 0,
+    status: { name: "都市平民" },
   });
   if (requirements.requiresFlag) life.historyFlags.push(requirements.requiresFlag);
+  const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", alive: true, affinity: 60, history: [] });
+  life.mana = 50;
+  if (/arranged/.test(event.id)) life.status = { name: "貴族" };
+  life.npcs = [person("p1", "父"), person("sweetheart", "恋愛相手", 22)];
+  if (/romance|family-home/.test(event.id)) life.romanticPartnerId = "sweetheart";
+  if (/children|marriage-crisis/.test(event.id)) {
+    life.spouseId = "sweetheart";
+    life.marriage = { harmony: 10 };
+  }
   return life;
 }
 
