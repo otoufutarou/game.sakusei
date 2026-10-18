@@ -212,6 +212,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
 test("skills progress during a month even without a scheduled life-log event", () => {
   const life = makeLife({
     age: 20,
+    playing: true,
     occupation: "教師",
     occupationSkill: 0,
     occupationRank: "初心者",
@@ -220,11 +221,36 @@ test("skills progress during a month even without a scheduled life-log event", (
     skillPractice: {},
     skillMonthProgress: 0,
     skillHistory: [],
+    nextLogAt: 50,
+    nextDecisionAt: 50,
+    maxHumanAge: 100,
   });
   const journalLength = life.journal.length;
-  advanceSkills(life, 1 / 12);
+  advanceLife(life, 1 / 12, () => 0.999);
   assert.ok(life.skills.teaching > 0);
   assert.equal(life.journal.length, journalLength);
+});
+
+test("race age multipliers normalize practice to human-equivalent years", () => {
+  const teachingAfterTenYears = (race) => {
+    const life = makeLife({
+      age: 20,
+      race,
+      occupation: "教師",
+      occupationSkill: 0,
+      occupationRank: "初心者",
+      skills: { teaching: 0 },
+      skillTalents: { teaching: "普通" },
+      skillPractice: {},
+      skillMonthProgress: 0,
+      skillHistory: [],
+    });
+    advanceSkills(life, 10);
+    return life.skills.teaching;
+  };
+  const humanSkill = teachingAfterTenYears(RACES.find((race) => race.id === "human"));
+  const elfSkill = teachingAfterTenYears(RACES.find((race) => race.id === "elf"));
+  assert.ok(Math.abs(humanSkill - elfSkill) < 1e-9);
 });
 
 test("skill formula honors aptitude, species, activity, and learning factors", () => {

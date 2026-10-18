@@ -1,4 +1,4 @@
-import { advanceLife, actualAge, chooseDecision, createLife, occupationTitle } from "./simulation.js";
+import { advanceLife, actualAge, chooseDecision, createLife, occupationTitle, skillTier } from "./simulation.js";
 import { characterSprite, drawJourney } from "./character-sprite.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -149,7 +149,7 @@ function updateLifeDisplay() {
   elements.race.textContent = life.race.name;
   elements.status.textContent = life.status.name;
   elements.home.textContent = `${life.nation.name}・${life.home}`;
-  elements.occupation.textContent = `${occupationTitle(life)} ${life.occupationRank}・技能${Math.floor(life.occupationSkill)}・勤続${Math.floor(life.occupationYears)}年`;
+  elements.occupation.textContent = `${life.educationStatus} · ${occupationTitle(life)}・技能${Math.round(life.occupationSkill)}（${skillTier(life.occupationSkill)}）・勤続${Math.floor(life.occupationYears)}人間換算年`;
   elements.sceneCaption.textContent = life.race.id === "dragon" ? "山の巣のそば" : life.age < 6 ? "新しい物語のはじまり" : life.home;
   elements.canvas.parentElement.dataset.region = life.race.id === "dragon" ? "dragon" : life.nation.id;
   elements.gold.textContent = `${Math.floor(life.gold)} G${life.debt > 0 ? ` · 借金${Math.floor(life.debt)}G` : ""}`;
