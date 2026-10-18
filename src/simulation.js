@@ -141,8 +141,8 @@ export function isRoutineEventEligible(life, event, age = life.age) {
   if (requirements.raceIds && !requirements.raceIds.includes(life.race.id)) return false;
   if (requirements.nationIds && !requirements.nationIds.includes(life.nation.id)) return false;
   if (requirements.occupations && !requirements.occupations.includes(life.occupation)) return false;
-  if (requirements.minimumGold !== undefined && life.gold < requirements.minimumGold) return false;
-  if (requirements.minimumSkill !== undefined && life.occupationSkill < requirements.minimumSkill) return false;
+  if (requirements.minimumGold !== undefined && (life.gold ?? 0) < requirements.minimumGold) return false;
+  if (requirements.minimumSkill !== undefined && (life.occupationSkill ?? 0) < requirements.minimumSkill) return false;
   if (requirements.requiresFlag && !(life.historyFlags ?? []).includes(requirements.requiresFlag)) return false;
   const history = life.eventHistory ?? [];
   if (requirements.oncePerLife && history.some((entry) => entry.id === event.id)) return false;
@@ -247,19 +247,11 @@ function appendEvent(life, text, kind = "life", label = "人生", id = null) {
 }
 
 function hasRecentEvent(life, id, cooldownYears) {
-  return (life.eventHistory ?? []).some((event) => event.id === id && life.age - event.age < cooldownYears);
+  const appearsInRecentJournal = (life.journal ?? []).slice(-20).some((event) => event.id === id);
+  return appearsInRecentJournal || (life.eventHistory ?? []).some((event) => event.id === id && life.age - event.age < cooldownYears);
 }
 
-function lifeStage(age) {
-  if (age < 6) return "child";
-  if (age < 13) return "school";
-  if (age < 18) return "youth";
-  if (age < 36) return "youngAdult";
-  if (age < 61) return "middle";
-  return "elder";
-}
-
-function ordinaryEvent(life, random) {
+export function selectRoutineEvent(life, random = Math.random) {
   const candidates = ROUTINE_EVENTS.filter((event) => isRoutineEventEligible(life, event));
   if (candidates.length === 0) return null;
   const event = weightedPick(candidates, (candidate) => candidate.weight ?? 1, random);
@@ -297,7 +289,10 @@ function advanceOccupation(life, elapsed) {
   const rank = [...OCCUPATION_RANKS].reverse().find((item) => life.occupationSkill >= item.skill);
   if (rank.name === life.occupationRank) return;
   life.occupationRank = rank.name;
-  appendEvent(life, `${life.occupation}として${life.occupationRank}の腕前に達し、仕事仲間から認められた。`, "life", "仕事の成長", `occupation-rank-${rank.skill}`);
+  const eventId = `occupation-rank-${life.occupation}-${rank.skill}`;
+  if (!hasRecentEvent(life, eventId, 0)) {
+    appendEvent(life, `${life.occupation}として${life.occupationRank}の腕前に達し、仕事仲間から認められた。`, "life", "仕事の成長", eventId);
+  }
 }
 
 function decisionFor(life, random) {
@@ -566,7 +561,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       break;
     }
     if (life.age >= life.nextLogAt) {
-      const event = ordinaryEvent(life, random);
+      const event = selectRoutineEvent(life, random);
       if (event) newEvents.push(appendEvent(life, event.text, event.kind, event.label, event.id));
       scheduleLog(life, random);
       continue;
