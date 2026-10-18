@@ -1,68 +1,291 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  CHOICE_EVENTS,
   RACES,
   ROUTINE_EVENTS,
+  TUNING,
+  availableChoiceEvents,
+  actualAge,
+  advanceLife,
   applyChoice,
+  applyRoutineEffect,
+  createLife,
   isRoutineEventEligible,
   routineLogMean,
   selectRoutineEvent,
 } from "./simulation.js";
+import { agePositionPercent, characterSprite, drawJourney } from "./character-sprite.js";
 
 function makeLife(overrides = {}) {
   return {
+    name: "Test",
     age: 20,
     active: true,
+    started: true,
     playing: false,
     eventCount: 0,
     race: RACES[0],
-    nation: { id: "kingdom" },
+    nation: { id: "kingdom", name: "王国" },
     occupation: "職人見習い",
     occupationSkill: 10,
+    occupationYears: 4,
+    occupationRank: "見習い",
+    dexterity: 70,
     gold: 30,
+    debt: 0,
+    health: "健やか",
+    fame: 0,
+    magic: 0,
+    familyCount: 0,
+    siblings: 0,
+    spouse: null,
+    children: [],
     journal: [],
     eventHistory: [],
     historyFlags: [],
+    relationships: [],
+    illnessUntil: 0,
     ...overrides,
   };
 }
 
-test("routine log interval scales with each race's age multiplier", () => {
+function seededRandom(seed) {
+  return () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+}
+
+function lifeForEvent(event) {
+  const requirements = event.requirements ?? {};
+  const race = RACES.find((candidate) => candidate.id === requirements.raceIds?.[0]) ?? RACES[0];
+  const age = Math.max(requirements.minAge ?? 0, 1);
+  const life = makeLife({
+    age: requirements.maxAge === undefined ? age : Math.min(age, requirements.maxAge),
+    race,
+    nation: { id: requirements.nationIds?.[0] ?? "kingdom", name: "試験国" },
+    occupation: requirements.occupations?.[0] ?? "職人見習い",
+    occupationSkill: requirements.minimumSkill ?? 10,
+    gold: Math.min(requirements.maximumGold ?? Infinity, requirements.minimumGold ?? 30),
+    health: requirements.healthStates?.[0] ?? "健やか",
+  });
+  if (requirements.requiresFlag) life.historyFlags.push(requirements.requiresFlag);
+  return life;
+}
+
+function simulateYears(race, years, seed) {
+  const random = seededRandom(seed);
+  const life = createLife(random);
+  life.race = race;
+  life.maxHumanAge = years;
+  life.nation = {
+    id: race.id === "elf" ? "forest" : race.id === "dwarf" ? "mountain" : race.id === "demon" ? "demon-realm" : "kingdom",
+    name: "試験国",
+  };
+  life.occupation = "教師";
+  life.occupationSkill = 30;
+  life.age = 0;
+  life.playing = true;
+  life.nextDecisionAt = Math.min(13, years + 1);
+  let steps = 0;
+  while (life.active && life.age < years && steps < 1000) {
+    advanceLife(life, 0.25, random);
+    if (life.pendingDecision) {
+      const safestChoice = life.pendingDecision.choices.at(-1);
+      applyChoice(life, safestChoice, random);
+    }
+    steps += 1;
+  }
+  return life;
+}
+
+test("event cadence uses human-equivalent rather than race-year units", () => {
   for (const race of RACES) {
-    assert.equal(routineLogMean(makeLife({ race })), race.multiplier);
+    const life = makeLife({ race });
+    assert.equal(routineLogMean(life), TUNING.routineLogIntervalYears);
+    assert.equal(actualAge({ age: 40, race }), 40 * race.multiplier);
   }
 });
 
-test("routine event requirements filter race, nation, age, and state", () => {
-  const demonEvent = ROUTINE_EVENTS.find((event) => event.id === "demon-magic");
-  const imperialEvent = ROUTINE_EVENTS.find((event) => event.id === "empire-draft");
-  assert.equal(isRoutineEventEligible(makeLife(), demonEvent), false);
-  assert.equal(isRoutineEventEligible(makeLife({ race: RACES.find((race) => race.id === "demon") }), demonEvent), true);
-  assert.equal(isRoutineEventEligible(makeLife(), imperialEvent), false);
-  assert.equal(isRoutineEventEligible(makeLife({ nation: { id: "empire" } }), imperialEvent), true);
-  assert.equal(isRoutineEventEligible(makeLife({ age: 10, race: RACES.find((race) => race.id === "demon") }), demonEvent), false);
-  assert.equal(isRoutineEventEligible(makeLife({ gold: 2 }), ROUTINE_EVENTS.find((event) => event.id === "trade-opportunity")), false);
+test("a generated birth remains paused until the player starts life", () => {
+  const life = createLife(seededRandom(1));
+  assert.equal(life.age, 0);
+  assert.equal(life.started, false);
+  assert.equal(life.playing, false);
+  assert.deepEqual(advanceLife(life, 1, seededRandom(2)), []);
+  assert.equal(life.age, 0);
 });
 
-test("routine selection does not repeat a recent event ID", () => {
+test("routine event catalog meets every required category count", () => {
+  const counts = Object.groupBy(ROUTINE_EVENTS, (event) => event.category);
+  assert.ok(ROUTINE_EVENTS.length >= 50);
+  assert.ok((counts["幼少期・教育"]?.length ?? 0) >= 6);
+  assert.ok((counts["職業・昇進"]?.length ?? 0) >= 10);
+  assert.ok((counts["家族・人間関係"]?.length ?? 0) >= 8);
+  assert.ok((counts["恋愛・結婚"]?.length ?? 0) >= 5);
+  assert.ok((counts["財産・借金"]?.length ?? 0) >= 5);
+  assert.ok((counts["病気・事故"]?.length ?? 0) >= 5);
+  assert.ok((counts["魔法・種族固有"]?.length ?? 0) >= 6);
+  assert.ok((counts["国家・戦争・冒険"]?.length ?? 0) >= 5);
+});
+
+test("every registered routine event passes its conditions, lottery, and outcome", () => {
+  for (const event of ROUTINE_EVENTS) {
+    const life = lifeForEvent(event);
+    assert.equal(isRoutineEventEligible(life, event), true, `${event.id} eligibility`);
+    assert.equal(selectRoutineEvent(life, () => 0, [event]).id, event.id, `${event.id} lottery`);
+    assert.ok(event.effect && Object.keys(event.effect).length > 0, `${event.id} effect`);
+    const before = structuredClone(life);
+    applyRoutineEffect(life, event, () => 0);
+    assert.notDeepEqual(life, before, `${event.id} changes life state`);
+  }
+});
+
+test("the last twenty journal entries block the same event ID", () => {
   const life = makeLife();
-  const first = selectRoutineEvent(life, () => 0);
-  life.journal.push({ id: first.id });
-  life.eventHistory.push({ id: first.id, age: life.age });
-  const second = selectRoutineEvent(life, () => 0);
-  assert.ok(first);
-  assert.ok(second);
-  assert.notEqual(second.id, first.id);
-  assert.equal(isRoutineEventEligible(life, first), false);
+  const event = ROUTINE_EVENTS.find((candidate) => candidate.id === "career-harvest");
+  life.occupation = "農作業";
+  life.journal = Array.from({ length: 19 }, (_, index) => ({ id: `other-${index}` }));
+  life.journal.push({ id: event.id });
+  assert.equal(isRoutineEventEligible(life, event), false);
+  life.journal.push(...Array.from({ length: 20 }, (_, index) => ({ id: `new-${index}` })));
+  assert.equal(isRoutineEventEligible(life, event), true);
 });
 
-test("choice outcomes unlock later events through persistent state", () => {
-  const life = makeLife({ occupationSkill: 0, gold: 10 });
-  life.pendingDecision = { choices: [{ effect: "invest" }] };
-  applyChoice(life, { effect: "invest" }, () => 0.5);
-  const followUp = ROUTINE_EVENTS.find((event) => event.id === "tool-investment");
-  assert.equal(life.occupationSkill, 5);
-  assert.ok(life.historyFlags.includes("invested-in-tools"));
-  assert.equal(isRoutineEventEligible(life, followUp), true);
-  assert.equal(isRoutineEventEligible(makeLife({ occupationSkill: 5 }), followUp), false);
+test("one-time events stay unavailable for the rest of a life", () => {
+  const life = lifeForEvent(ROUTINE_EVENTS.find((event) => event.id === "child-first-book"));
+  const event = ROUTINE_EVENTS.find((candidate) => candidate.id === "child-first-book");
+  assert.equal(isRoutineEventEligible(life, event), true);
+  life.eventHistory.push({ id: event.id, age: life.age });
+  assert.equal(isRoutineEventEligible(life, event), false);
+});
+
+test("the ore contract applies material cost, skill-based success, and rewards", () => {
+  const life = makeLife({
+    gold: 20,
+    dexterity: 100,
+    occupationSkill: 80,
+    pendingDecision: { choices: [{ effect: "ore-contract" }, { effect: "decline-contract" }] },
+  });
+  applyChoice(life, { effect: "ore-contract" }, () => 0.5);
+  assert.equal(life.gold, 32);
+  assert.equal(life.fame, 5);
+  assert.equal(life.occupationSkill, 83);
+  assert.ok(life.historyFlags.includes("ore-contract-attempted"));
+});
+
+test("declining the ore contract costs nothing", () => {
+  const life = makeLife({
+    gold: 20,
+    pendingDecision: { choices: [{ effect: "ore-contract" }, { effect: "decline-contract" }] },
+  });
+  applyChoice(life, { effect: "decline-contract" }, () => 0.5);
+  assert.equal(life.gold, 20);
+  assert.equal(life.fame, 0);
+});
+
+test("species lifespan and event density scale with the human-equivalent lifespan", () => {
+  const races = [RACES[0], RACES.find((race) => race.id === "demon"), RACES.find((race) => race.id === "elf"), RACES.find((race) => race.id === "dragon")];
+  const samples = races.map((race, raceIndex) => {
+    let eventTotal = 0;
+    let decisionTotal = 0;
+    let ageTotal = 0;
+    for (let run = 0; run < 100; run += 1) {
+      const years = 80 / race.multiplier;
+      const life = simulateYears(race, years, 1000 + raceIndex * 100 + run);
+      eventTotal += life.journal.length;
+      decisionTotal += life.journal.filter((event) => event.kind === "decision").length;
+      ageTotal += life.age * race.multiplier;
+    }
+    return { race, events: eventTotal / 100, decisions: decisionTotal / 100, realAge: ageTotal / 100 };
+  });
+  assert.ok(samples[0].events > samples[1].events);
+  assert.ok(samples[1].events > samples[2].events);
+  assert.ok(samples[2].events > samples[3].events);
+  assert.ok(samples.every((sample) => sample.realAge <= 80.1));
+  assert.ok(samples[0].events >= 65 && samples[0].events <= 115);
+  assert.ok(samples[0].decisions >= 12 && samples[0].decisions <= 35);
+});
+
+test("life-path positions interpolate the requested milestones", () => {
+  for (const [age, position] of [[0, 5], [20, 17], [40, 45], [60, 65], [80, 82], [100, 94], [120, 98]]) {
+    assert.equal(agePositionPercent(age), position);
+  }
+  assert.equal(agePositionPercent(30), 31);
+  assert.equal(agePositionPercent(140), 98);
+});
+
+test("journey sprite moves with age and reflects species, home, and family", () => {
+  const makeContext = () => {
+    const pixels = [];
+    const gradients = [];
+    return {
+      pixels,
+      gradients,
+      canvas: { width: 1000, height: 124 },
+      clearRect() {},
+      fillRect(x, y, width, height) { pixels.push([x, y, width, height, this.fillStyle]); },
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      fill() {},
+      createLinearGradient() {
+        return { addColorStop: (...stop) => gradients.push(stop) };
+      },
+    };
+  };
+  const humanLife = makeLife({
+    age: 0,
+    race: RACES[0],
+    nation: { id: "kingdom" },
+    appearance: { hair: "#34271f", coat: "#647d72" },
+    playing: true,
+  });
+  const newborn = makeContext();
+  drawJourney(newborn, characterSprite, { life: humanLife, frame: 0 });
+  humanLife.age = 40;
+  const adult = makeContext();
+  drawJourney(adult, characterSprite, { life: humanLife, frame: 1 });
+  const newbornHairX = Math.min(...newborn.pixels.filter((pixel) => pixel[4] === "#34271f").map((pixel) => pixel[0]));
+  const adultHairX = Math.min(...adult.pixels.filter((pixel) => pixel[4] === "#34271f").map((pixel) => pixel[0]));
+  assert.ok(adultHairX > newbornHairX);
+
+  const elfLife = { ...humanLife, race: RACES.find((race) => race.id === "elf"), nation: { id: "forest" } };
+  const elfScene = makeContext();
+  drawJourney(elfScene, characterSprite, { life: elfLife, frame: 0 });
+  assert.notDeepEqual(elfScene.pixels, adult.pixels);
+  assert.notDeepEqual(elfScene.gradients, adult.gradients);
+
+  const familyLife = { ...humanLife, spouse: "Partner", children: ["Child"] };
+  const familyScene = makeContext();
+  drawJourney(familyScene, characterSprite, { life: familyLife, frame: 0 });
+  assert.ok(familyScene.pixels.length > adult.pixels.length);
+});
+
+test("choice catalog contains distinct stateful decision events", () => {
+  assert.ok(CHOICE_EVENTS.length >= 10);
+  assert.equal(new Set(CHOICE_EVENTS.map((event) => event.id)).size, CHOICE_EVENTS.length);
+  assert.ok(CHOICE_EVENTS.every((event) => event.choices.length >= 2 && event.requirements && event.weight > 0));
+  for (const event of CHOICE_EVENTS) {
+    const life = lifeForEvent(event);
+    assert.equal(isRoutineEventEligible(life, event), true, `${event.id} eligibility`);
+    assert.ok(availableChoiceEvents(life).includes(event), `${event.id} decision pool`);
+  }
+});
+
+test("one hundred human lives produce varied logs without immediate repeats", () => {
+  let distinctIds = new Set();
+  let consecutiveDuplicateCount = 0;
+  for (let run = 0; run < 100; run += 1) {
+    const life = simulateYears(RACES[0], 80, run + 1);
+    for (const event of life.journal) {
+      if (event.id) distinctIds.add(event.id);
+    }
+    for (let index = 1; index < life.journal.length; index += 1) {
+      if (life.journal[index].text === life.journal[index - 1].text) consecutiveDuplicateCount += 1;
+    }
+  }
+  assert.ok(distinctIds.size >= 40);
+  assert.equal(consecutiveDuplicateCount, 0);
 });
