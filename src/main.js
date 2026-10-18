@@ -3,7 +3,7 @@ import {
 } from "./simulation.js";
 import { characterSprite, drawJourney } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
-import { clearSave, loadFromStorage, saveToStorage } from "./save.js";
+import { clearSave, inspectSave, saveToStorage } from "./save.js";
 
 const BUILD_ID = "__BUILD_ID__";
 
@@ -124,7 +124,10 @@ function showPrologue() {
     ["魔力", `${Math.round(life.mana)}（${magicTier(life.mana)}）`],
   ]);
   elements.prologueNote.textContent = "能力・才能・魔力は生まれつきで、見えるのは魔力だけです。詳細は人生の途中でステータスから確認できます。";
-  const saved = loadFromStorage();
+  const { life: saved, error: saveError } = inspectSave();
+  const warning = $("#save-warning");
+  warning.hidden = !saveError;
+  warning.textContent = saveError ? `${saveError}。このまま新しい人生を始めると、この保存データは上書きされます。` : "";
   elements.resumeLife.hidden = !saved;
   elements.resumeLife.textContent = saved ? `保存した人生を続ける（${saved.name}・${actualAge(saved)}歳）` : "";
   if (!elements.prologueDialog.open) elements.prologueDialog.showModal();
@@ -152,7 +155,7 @@ function resetView() {
 }
 
 function resumeLife() {
-  const saved = loadFromStorage();
+  const { life: saved } = inspectSave();
   if (!saved) return;
   life = saved;
   life.started = true;

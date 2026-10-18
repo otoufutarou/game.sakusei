@@ -1,0 +1,12 @@
+{
+  "name": "game-sakusei",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/simulation.test.js",
+    "test:browser": "node --test tests/browser.test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.48.0"
+  }
+}
