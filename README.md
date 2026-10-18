@@ -18,4 +18,4 @@ Open `index.html` in a modern browser. No build step, package installation, serv
 
 This repository had no application code or technology configuration, so the prototype uses native HTML, CSS, and JavaScript with no dependencies. This is a provisional choice.
 
-Event timing, decision timing, aging/death rates, and choice outcomes are initial tuning values in `src/simulation.js`, not confirmed final balance. A mundane life is represented by ordinary outcomes, not a separate mode or score. Succession disputes and vampire thralls are outside this slice; their ambiguous rules remain undecided.
+Event timing, decision timing, aging/death rates, and choice outcomes are initial tuning values in `src/simulation.js`, not confirmed final balance. A mundane life is represented by ordinary outcomes, not a separate mode or score. Succession disputes and vampire thralls are outside this slice; neither the question of counting the protagonist among succession candidates nor the aggregate-stat test for thrall conversion is interpreted here. Family planning, marriage, detailed NPC autonomy, careers, and changing world states are also outside this slice.

@@ -221,6 +221,8 @@ elements.play.addEventListener("click", () => {
   lastTimestamp = 0;
   updateControls();
 });
+elements.decisionDialog.addEventListener("cancel", (event) => event.preventDefault());
+elements.endingDialog.addEventListener("cancel", (event) => event.preventDefault());
 elements.next.addEventListener("click", () => {
   if (!life.active || life.pendingDecision) return;
   life.playing = true;

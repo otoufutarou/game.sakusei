@@ -37,7 +37,7 @@ const GIVEN_NAMES = {
 
 const GENDERS = ["女性", "男性"];
 const HOME_TYPES = ["王都", "地方都市", "農村", "辺境"];
-const WORKS = ["家業の手伝い", "農作業", "服飾店の見習い", "職人見習い", "兵士", "商人", "冒険者", "教師", "魔術師"];
+const WORKS = ["家業の手伝い", "農作業", "服飾店の見習い", "職人見習い", "兵士", "商人", "冒険者", "教師"];
 const PERSONALITIES = ["穏やか", "好奇心旺盛", "慎重", "負けず嫌い", "思いやり深い", "自由を好む"];
 const SURNAMES = ["アステル", "リュネ", "ヴァイス", "カナン", "ベルク", "エルド", "セレス", "ノルン"];
 const SITUATIONS = ["平和", "平和", "平和", "不況", "疫病流行", "飢饉", "戦争中"];
@@ -45,7 +45,8 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
-  logEventsPerHumanYear: 3.5,
+  // Decision prompts and outcomes add roughly 0.5 journal entries per year.
+  logEventsPerHumanYear: 3,
   decisionMeanYears: 4,
   firstDecisionEarliestAge: 13,
   minorIllnessChanceByAge: [
@@ -107,7 +108,7 @@ function pickStatus(nation, random) {
 
 function birthStory(life) {
   const family = life.family;
-  return `あなたは${life.nation.name}の${life.home}、${family}に生まれた。${life.status.name}の家に生まれたあなたの物語が始まる。`;
+  return `あなたは${life.nation.name}の${life.home}にある${family}家庭に生まれた。${life.status.name}として、あなたの物語が始まる。`;
 }
 
 function createInitialDecisionAge(random) {
@@ -212,12 +213,12 @@ function ordinaryEvent(life, random) {
       ["仕事", `${life.occupation}として経験を重ね、周囲から頼られることが増えた。`],
       ["人間関係", "昔からの友人と再会し、近況を語り合った。"],
       ["暮らし", `${life.home}の通りに新しい店が開き、町が少し活気づいた。`],
-      ["世界", `${life.nation.name}では大きな争いもなく、穏やかな日々が続いている。`],
+      ["世界", worldUpdate(life)],
     ],
     middle: [
       ["仕事", `${life.occupation}の仕事に慣れ、若い人に経験を伝える機会が増えた。`],
       ["家族", "家族と過ごす時間を大切にしながら、日々の仕事を続けた。"],
-      ["世界", `${life.nation.name}の交易が少しずつ盛んになり、町に新しい品が届いた。`],
+      ["世界", worldUpdate(life)],
     ],
     elder: [
       ["人生", "長い年月で得た知恵を、近くに住む若者へ伝えた。"],
@@ -227,6 +228,17 @@ function ordinaryEvent(life, random) {
   };
   const [label, text] = randomItem(eventOptions[stage], random);
   return { label, text, kind: label === "世界" ? "world" : "life" };
+}
+
+function worldUpdate(life) {
+  const updates = {
+    平和: `${life.nation.name}では大きな争いもなく、穏やかな日々が続いている。`,
+    不況: `${life.nation.name}では商いが細り、仕事を探す人の姿が増えてきた。`,
+    疫病流行: `${life.nation.name}では疫病への警戒が続き、人々は医師の助言に耳を傾けている。`,
+    飢饉: `${life.nation.name}では食料が不足し、市場の値段も上がっている。`,
+    戦争中: `${life.nation.name}では戦が続き、町にも戦地の知らせが届いている。`,
+  };
+  return updates[life.situation] ?? updates["平和"];
 }
 
 function scheduleLog(life, random) {
@@ -365,6 +377,7 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "学びを続け、新しい知識を身につけた。";
       break;
     case "work":
+      life.gold += 2;
       message = "家の仕事を手伝い、暮らしを支えた。";
       break;
     case "apprentice":
