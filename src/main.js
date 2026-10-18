@@ -18,7 +18,6 @@ const elements = {
   play: $("#toggle-play"),
   next: $("#next-decision"),
   indicator: $("#flow-indicator"),
-  hint: $("#control-hint"),
   gold: $("#gold-value"),
   health: $("#health-value"),
   fame: $("#fame-value"),
@@ -72,6 +71,7 @@ function createJournalItem(event) {
 }
 
 function addJournalEvents() {
+  if (renderedEventCount === life.journal.length) return;
   const events = life.journal.slice(-3).reverse();
   elements.eventList.replaceChildren(...events.map(createJournalItem));
   if (!elements.historyPage.hidden) renderHistory();
@@ -149,14 +149,19 @@ function updateLifeDisplay() {
   elements.race.textContent = life.race.name;
   elements.status.textContent = life.status.name;
   elements.home.textContent = `${life.nation.name}・${life.home}`;
-  elements.occupation.textContent = `${occupationTitle(life)} · ${life.occupationRank}`;
+  elements.occupation.textContent = `${occupationTitle(life)} ${life.occupationRank}・技能${Math.floor(life.occupationSkill)}・勤続${Math.floor(life.occupationYears)}年`;
   elements.sceneCaption.textContent = life.race.id === "dragon" ? "山の巣のそば" : life.age < 6 ? "新しい物語のはじまり" : life.home;
   elements.canvas.parentElement.dataset.region = life.race.id === "dragon" ? "dragon" : life.nation.id;
-  elements.gold.textContent = `${Math.floor(life.gold)} G`;
+  elements.gold.textContent = `${Math.floor(life.gold)} G${life.debt > 0 ? ` · 借金${Math.floor(life.debt)}G` : ""}`;
   elements.health.textContent = life.health;
   elements.fame.textContent = life.fame > 20 ? "知られた人" : life.fame > 5 ? "少し知られる" : "無名";
-  elements.people.textContent = life.familyCount > 0
-    ? `${life.spouse ? "配偶者 " : ""}${life.children.length ? `子 ${life.children.length}人` : ""}`.trim()
+  const family = [
+    life.spouse ? "配偶者" : "",
+    life.children.length ? `子 ${life.children.length}人` : "",
+    life.siblings ? `きょうだい ${life.siblings}人` : "",
+  ].filter(Boolean);
+  elements.people.textContent = family.length
+    ? family.join("・")
     : life.relationships.length > 0 ? `友人 ${life.relationships.length}人` : "家族";
 }
 
@@ -214,8 +219,8 @@ function showEnding() {
   updateControls();
 }
 
-function drawScene(timestamp) {
-  if (timestamp - lastDrawAt < 180) return;
+function drawScene(timestamp, force = false) {
+  if (!force && timestamp - lastDrawAt < 180) return;
   lastDrawAt = timestamp;
   const frame = Math.floor(timestamp / 380) % 2;
   drawJourney(elements.canvas.getContext("2d"), characterSprite, { life, frame });
@@ -254,7 +259,7 @@ function startNewLife() {
   addJournalEvents();
   updateLifeDisplay();
   updateControls();
-  drawScene(performance.now());
+  drawScene(performance.now(), true);
   showPrologue();
 }
 
@@ -298,6 +303,6 @@ $("#close-history").addEventListener("click", () => {
 addJournalEvents();
 updateLifeDisplay();
 updateControls();
-drawScene(0);
+drawScene(performance.now(), true);
 showPrologue();
 requestAnimationFrame(tick);
