@@ -45,8 +45,8 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
-  routineLogIntervalYears: 0.9,
-  decisionMeanYears: 3.2,
+  routineLogIntervalYears: 1.9,
+  decisionMeanYears: 2.8,
   firstDecisionEarliestAge: 13,
   minorIllnessChanceByAge: [
     { until: 12, annualChance: 0.1 },
@@ -164,6 +164,7 @@ export function routineLogMean(life) {
 }
 
 export function isRoutineEventEligible(life, event, age = life.age) {
+  if (!event) return false;
   const requirements = event.requirements ?? event;
   if (age < (requirements.minAge ?? 0) || age > (requirements.maxAge ?? Infinity)) return false;
   if (requirements.raceIds && !requirements.raceIds.includes(life.race.id)) return false;
@@ -406,7 +407,7 @@ function advanceOccupation(life, elapsed) {
   appendEvent(life, `${occupationTitle(life)}として${life.occupationRank}の腕前に達し、勤続${Math.floor(life.occupationYears)}年の成果を認められた。`, "life", "仕事の成長", eventId);
 }
 
-function occupationTitle(life) {
+export function occupationTitle(life) {
   if (life.occupation === "職人見習い" || life.occupation === "服飾店の見習い") {
     if (life.occupationSkill >= 95) return "工房主";
     if (life.occupationSkill >= 80) return "親方";
@@ -414,6 +415,15 @@ function occupationTitle(life) {
     if (life.occupationSkill >= 40) return "一人前の職人";
   }
   return life.occupation;
+}
+
+function lifeStage(age) {
+  if (age < 6) return "child";
+  if (age < 13) return "school";
+  if (age < 18) return "youth";
+  if (age < 35) return "youngAdult";
+  if (age < 60) return "middle";
+  return "elder";
 }
 
 const CHOICE_EVENTS = [

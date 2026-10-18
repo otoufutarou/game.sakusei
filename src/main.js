@@ -1,5 +1,5 @@
-import { advanceLife, actualAge, chooseDecision, createLife } from "./simulation.js";
-import { characterSprite, drawCharacter } from "./character-sprite.js";
+import { advanceLife, actualAge, chooseDecision, createLife, occupationTitle } from "./simulation.js";
+import { characterSprite, drawJourney } from "./character-sprite.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -25,6 +25,12 @@ const elements = {
   people: $("#people-value"),
   eventCount: $("#event-count"),
   eventList: $("#event-list"),
+  historyPage: $("#history-page"),
+  historyList: $("#history-list"),
+  prologueDialog: $("#prologue-dialog"),
+  prologueCopy: $("#prologue-copy"),
+  birthRecord: $("#birth-record"),
+  beginLife: $("#begin-life"),
   decisionDialog: $("#decision-dialog"),
   decisionAge: $("#decision-age"),
   decisionTitle: $("#decision-title"),
@@ -47,58 +53,94 @@ function formatAge() {
   return `${actualAge(life)}歳`;
 }
 
+function createJournalItem(event) {
+  const item = document.createElement("li");
+  item.className = `event-item ${event.kind === "decision" ? "decision-event" : ""} ${event.kind === "world" ? "world-event" : ""} ${event.kind === "death" ? "death-event" : ""}`;
+  const age = document.createElement("span");
+  age.className = "event-age";
+  age.textContent = `${Math.floor(event.age * life.race.multiplier)}歳`;
+  const content = document.createElement("div");
+  content.className = "event-content";
+  const label = document.createElement("span");
+  label.className = "event-kind";
+  label.textContent = event.label;
+  const text = document.createElement("div");
+  text.textContent = event.text;
+  content.append(label, text);
+  item.append(age, content);
+  return item;
+}
+
 function addJournalEvents() {
-  const events = life.journal.slice(renderedEventCount);
-  for (const event of events) {
-    const item = document.createElement("li");
-    item.className = `event-item ${event.kind === "decision" ? "decision-event" : ""} ${event.kind === "world" ? "world-event" : ""} ${event.kind === "death" ? "death-event" : ""}`;
-
-    const age = document.createElement("span");
-    age.className = "event-age";
-    age.textContent = `${Math.floor(event.age * life.race.multiplier)}歳`;
-
-    const content = document.createElement("div");
-    content.className = "event-content";
-    const label = document.createElement("span");
-    label.className = "event-kind";
-    label.textContent = event.label;
-    const text = document.createElement("div");
-    text.textContent = event.text;
-    content.append(label, text);
-    item.append(age, content);
-    elements.eventList.append(item);
-  }
+  const events = life.journal.slice(-3).reverse();
+  elements.eventList.replaceChildren(...events.map(createJournalItem));
+  if (!elements.historyPage.hidden) renderHistory();
   renderedEventCount = life.journal.length;
   elements.eventCount.textContent = String(life.eventCount);
-  if (events.length > 0) elements.eventList.scrollTop = elements.eventList.scrollHeight;
+}
+
+function renderHistory() {
+  elements.historyList.replaceChildren(...life.journal.slice().reverse().map(createJournalItem));
+}
+
+function showPrologue() {
+  const { parents } = life;
+  elements.prologueCopy.textContent = `あなたは${life.nation.name}の${life.home}で、${life.race.name}として生を受けた。`;
+  const records = [
+    ["種族", life.race.name],
+    ["最高寿命", `${life.race.lifespan}歳`],
+    ["成人年齢", `${Math.floor(18 * life.race.multiplier)}歳`],
+    ["出生国", life.nation.name],
+    ["出生地", life.home],
+    ["身分", life.status.name],
+    ["父の職業", parents.father],
+    ["母の職業", parents.mother],
+    ["家庭の財産", `${parents.gold}G`],
+    ["家庭の借金", `${parents.debt}G`],
+    ["出生時の魔力", life.magicPower],
+  ];
+  elements.birthRecord.replaceChildren();
+  for (const [labelText, valueText] of records) {
+    const cell = document.createElement("div");
+    const label = document.createElement("small");
+    const value = document.createElement("strong");
+    label.textContent = labelText;
+    value.textContent = valueText;
+    cell.append(label, value);
+    elements.birthRecord.append(cell);
+  }
+  elements.prologueDialog.showModal();
+}
+
+function beginLife() {
+  life.started = true;
+  life.playing = true;
+  elements.prologueDialog.close();
+  lastTimestamp = 0;
+  updateControls();
 }
 
 function updateControls() {
   const waiting = Boolean(life.pendingDecision);
   const ended = !life.active;
   const paused = !life.playing;
-  elements.play.disabled = ended || waiting;
+  elements.play.disabled = ended || waiting || !life.started;
   elements.play.innerHTML = life.playing ? 'Ⅱ <span>一時停止</span>' : '▶ <span>再開</span>';
   elements.play.setAttribute("aria-label", life.playing ? "一時停止" : "再開");
-  elements.next.disabled = ended || waiting;
+  elements.next.disabled = ended || waiting || !life.started;
   elements.indicator.classList.toggle("paused", paused);
   elements.indicator.innerHTML = `<i></i>${ended ? "人生の終わり" : waiting ? "決断待ち" : paused ? "一時停止" : "進行中"}`;
-  elements.hint.textContent = waiting
-    ? "選択肢を選ぶと、時間が再び流れ始めます。"
-    : paused
-      ? "一時停止中です。再開して人生を進めましょう。"
-      : "人生は自動で進み、決断の時には立ち止まります。";
   document.querySelectorAll("[data-speed]").forEach((button) => {
     const selected = Number(button.dataset.speed) === life.speed;
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
-    button.disabled = ended;
+    button.disabled = ended || !life.started;
   });
 }
 
 function updateLifeDisplay() {
   elements.worldStatus.textContent = life.situation === "平和" ? "世界は穏やかです" : `${life.nation.name} — ${life.situation}`;
-  elements.year.textContent = `第 ${Math.floor(life.age) + 1} 年`;
+  elements.year.textContent = `人間換算 ${Math.floor(life.age)}年`;
   elements.chapter.textContent = String(Math.min(99, Math.floor(life.age / 10) + 1)).padStart(2, "0");
   elements.age.textContent = formatAge();
   elements.characterName.textContent = life.name;
@@ -107,12 +149,15 @@ function updateLifeDisplay() {
   elements.race.textContent = life.race.name;
   elements.status.textContent = life.status.name;
   elements.home.textContent = `${life.nation.name}・${life.home}`;
-  elements.occupation.textContent = life.occupation;
+  elements.occupation.textContent = `${occupationTitle(life)} · ${life.occupationRank}`;
   elements.sceneCaption.textContent = life.race.id === "dragon" ? "山の巣のそば" : life.age < 6 ? "新しい物語のはじまり" : life.home;
+  elements.canvas.parentElement.dataset.region = life.race.id === "dragon" ? "dragon" : life.nation.id;
   elements.gold.textContent = `${Math.floor(life.gold)} G`;
   elements.health.textContent = life.health;
   elements.fame.textContent = life.fame > 20 ? "知られた人" : life.fame > 5 ? "少し知られる" : "無名";
-  elements.people.textContent = life.familyCount > 0 ? `家族 ${life.familyCount}人` : "家族";
+  elements.people.textContent = life.familyCount > 0
+    ? `${life.spouse ? "配偶者 " : ""}${life.children.length ? `子 ${life.children.length}人` : ""}`.trim()
+    : life.relationships.length > 0 ? `友人 ${life.relationships.length}人` : "家族";
 }
 
 function showDecision() {
@@ -150,8 +195,9 @@ function showEnding() {
   const records = [
     ["種族", life.race.name],
     ["実年齢", `${Math.floor(life.deathAge * life.race.multiplier)}歳`],
+    ["人間換算", `${Math.floor(life.deathAge)}年`],
     ["最期", life.deathCause],
-    ["最後の仕事", life.occupation],
+    ["最後の仕事", occupationTitle(life)],
     ["財産", `${Math.floor(life.gold)} G`],
     ["人生の記録", `${life.eventCount} 件`],
   ];
@@ -172,12 +218,7 @@ function drawScene(timestamp) {
   if (timestamp - lastDrawAt < 180) return;
   lastDrawAt = timestamp;
   const frame = Math.floor(timestamp / 380) % 2;
-  drawCharacter(elements.canvas.getContext("2d"), characterSprite, {
-    walking: life.playing,
-    frame,
-    hair: life.appearance.hair,
-    coat: life.appearance.coat,
-  });
+  drawJourney(elements.canvas.getContext("2d"), characterSprite, { life, frame });
   elements.canvas.setAttribute("aria-label", `${life.playing ? "歩く" : "待機する"}${life.race.name}の主人公`);
 }
 
@@ -203,6 +244,7 @@ function tick(timestamp) {
 function startNewLife() {
   if (elements.decisionDialog.open) elements.decisionDialog.close();
   if (elements.endingDialog.open) elements.endingDialog.close();
+  if (elements.prologueDialog.open) elements.prologueDialog.close();
   life = createLife();
   renderedEventCount = 0;
   lastTimestamp = 0;
@@ -213,6 +255,7 @@ function startNewLife() {
   updateLifeDisplay();
   updateControls();
   drawScene(performance.now());
+  showPrologue();
 }
 
 elements.play.addEventListener("click", () => {
@@ -221,6 +264,7 @@ elements.play.addEventListener("click", () => {
   lastTimestamp = 0;
   updateControls();
 });
+elements.prologueDialog.addEventListener("cancel", (event) => event.preventDefault());
 elements.decisionDialog.addEventListener("cancel", (event) => event.preventDefault());
 elements.endingDialog.addEventListener("cancel", (event) => event.preventDefault());
 elements.next.addEventListener("click", () => {
@@ -238,9 +282,22 @@ document.querySelectorAll("[data-speed]").forEach((button) => {
 });
 $("#new-life").addEventListener("click", startNewLife);
 $("#ending-new-life").addEventListener("click", startNewLife);
+elements.beginLife.addEventListener("click", beginLife);
+$("#open-history").addEventListener("click", () => {
+  elements.historyPage.hidden = false;
+  renderHistory();
+});
+$("#open-history-inline").addEventListener("click", () => {
+  elements.historyPage.hidden = false;
+  renderHistory();
+});
+$("#close-history").addEventListener("click", () => {
+  elements.historyPage.hidden = true;
+});
 
 addJournalEvents();
 updateLifeDisplay();
 updateControls();
 drawScene(0);
+showPrologue();
 requestAnimationFrame(tick);

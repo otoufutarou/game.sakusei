@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#171716">
+    <meta name="theme-color" content="#F5F0E6">
     <title>灯火の一生 — Fantasy Life</title>
     <link rel="stylesheet" href="./styles.css">
     <script type="module" src="./src/main.js"></script>
@@ -21,6 +21,7 @@
           <span class="status-divider" aria-hidden="true"></span>
           <span id="year-display">第 1 年</span>
         </div>
+        <button class="history-button" id="open-history" type="button">人生の記録</button>
         <button class="new-life-button" id="new-life" type="button">新しい人生 <span aria-hidden="true">↻</span></button>
       </header>
 
@@ -28,9 +29,8 @@
         <div>
           <p class="eyebrow">A LIFE UNWRITTEN</p>
           <h1>ひとつの人生、<em>ひとつの物語。</em></h1>
-          <p class="intro-copy">生まれる場所も、出会う人も、あなたの知らないところで決まっていく。</p>
         </div>
-        <div class="chapter-mark"><span>CHAPTER</span><strong id="chapter-display">01</strong></div>
+        <div class="chapter-mark"><span>章</span><strong id="chapter-display">01</strong></div>
       </section>
 
       <div class="game-layout">
@@ -44,12 +44,7 @@
               <span class="age-badge" id="age-badge">0歳</span>
             </div>
             <div class="character-scene">
-              <div class="scene-sun" aria-hidden="true"></div>
-              <div class="scene-cloud cloud-one" aria-hidden="true"></div>
-              <div class="scene-cloud cloud-two" aria-hidden="true"></div>
-              <div class="scene-hill hill-back" aria-hidden="true"></div>
-              <div class="scene-hill hill-front" aria-hidden="true"></div>
-              <canvas id="character-canvas" width="160" height="200" role="img" aria-label="待機中の主人公のドット絵"></canvas>
+              <canvas id="character-canvas" width="1000" height="124" role="img" aria-label="人生の道を歩む主人公のドット絵"></canvas>
               <span class="scene-caption" id="scene-caption">新しい物語のはじまり</span>
             </div>
             <div class="identity">
@@ -63,39 +58,31 @@
               <div><span class="trait-icon">⌂</span><span id="home-detail">出生地を紡いでいます</span></div>
               <div><span class="trait-icon">◷</span><span id="occupation-detail">まだ幼い子ども</span></div>
             </div>
-          </section>
-
-          <section class="panel controls-panel" aria-labelledby="controls-heading">
-            <div class="panel-heading compact">
-              <div><p class="eyebrow">TIME FLOW</p><h2 id="controls-heading">人生の歩み</h2></div>
-              <span class="flow-indicator" id="flow-indicator"><i></i>進行中</span>
-            </div>
-            <div class="control-buttons">
-              <button class="primary-control" id="toggle-play" type="button" aria-label="一時停止">Ⅱ <span>一時停止</span></button>
-              <button class="secondary-control" id="next-decision" type="button">次の決断まで <span aria-hidden="true">→</span></button>
-            </div>
-            <div class="speed-row">
-              <span>時間の流れ</span>
-              <div class="speed-options" role="group" aria-label="再生速度">
-                <button type="button" data-speed="1" class="selected" aria-pressed="true">1×</button>
-                <button type="button" data-speed="2" aria-pressed="false">2×</button>
-                <button type="button" data-speed="4" aria-pressed="false">4×</button>
-                <button type="button" data-speed="8" aria-pressed="false">8×</button>
-              </div>
-            </div>
-            <p class="control-hint" id="control-hint">人生は自動で進み、決断の時には立ち止まります。</p>
-          </section>
-
-          <section class="panel stats-panel" aria-labelledby="stats-heading">
-            <div class="panel-heading compact">
-              <div><p class="eyebrow">AT A GLANCE</p><h2 id="stats-heading">暮らしの様子</h2></div>
-            </div>
             <div class="stat-grid">
               <div class="stat-item"><span class="stat-icon coin">G</span><div><small>所持金</small><strong id="gold-value">12 G</strong></div></div>
               <div class="stat-item"><span class="stat-icon heart">♥</span><div><small>健康</small><strong id="health-value">健やか</strong></div></div>
               <div class="stat-item"><span class="stat-icon star">✦</span><div><small>名声</small><strong id="fame-value">無名</strong></div></div>
               <div class="stat-item"><span class="stat-icon people">⌁</span><div><small>大切な人</small><strong id="people-value">家族</strong></div></div>
             </div>
+            <section class="controls-panel" aria-labelledby="controls-heading">
+              <div class="controls-heading">
+                <h2 id="controls-heading">人生の歩み</h2>
+                <span class="flow-indicator" id="flow-indicator"><i></i>進行中</span>
+              </div>
+              <div class="control-buttons">
+                <button class="primary-control" id="toggle-play" type="button" aria-label="一時停止">Ⅱ <span>一時停止</span></button>
+                <button class="secondary-control" id="next-decision" type="button">次の決断まで <span aria-hidden="true">→</span></button>
+              </div>
+              <div class="speed-row">
+                <span>時間の流れ</span>
+                <div class="speed-options" role="group" aria-label="再生速度">
+                  <button type="button" data-speed="1" class="selected" aria-pressed="true">1×</button>
+                  <button type="button" data-speed="2" aria-pressed="false">2×</button>
+                  <button type="button" data-speed="4" aria-pressed="false">4×</button>
+                  <button type="button" data-speed="8" aria-pressed="false">8×</button>
+                </div>
+              </div>
+            </section>
           </section>
         </aside>
 
@@ -107,20 +94,28 @@
             </div>
             <div class="journal-count"><span class="live-dot" aria-hidden="true"></span><span id="event-count">0</span> 件</div>
           </div>
-          <div class="journal-filter" aria-label="記録の表示">
-            <span class="filter-active">すべての記録</span>
-            <span class="journal-note">新しい出来事が綴られます</span>
-          </div>
+          <p class="journal-note">最新の出来事</p>
           <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
-          <div class="journal-bottom">
-            <span class="bottom-flourish" aria-hidden="true">✳</span>
-            <span>あなたの選択が、この物語を紡ぎます。</span>
-            <span class="bottom-flourish" aria-hidden="true">✳</span>
-          </div>
+          <button class="history-button history-inline" id="open-history-inline" type="button">過去の記録をすべて見る →</button>
         </section>
       </div>
-      <footer class="disclaimer">試作版 — 出来事の頻度・寿命などの数値は調整可能な仮設定です。</footer>
+      <section class="history-page" id="history-page" hidden aria-labelledby="history-heading">
+        <header class="journal-header">
+          <div><p class="eyebrow">THE LIFE CHRONICLE</p><h2 id="history-heading">人生の記録</h2></div>
+          <button class="history-button" id="close-history" type="button">ゲームに戻る</button>
+        </header>
+        <ol class="event-list history-list" id="history-list"></ol>
+      </section>
     </main>
+
+    <dialog class="decision-dialog prologue-dialog" id="prologue-dialog" aria-labelledby="prologue-title">
+      <div class="dialog-spark" aria-hidden="true">✦</div>
+      <p class="eyebrow">A NEW LIFE BEGINS</p>
+      <h2 id="prologue-title">あなたの生まれた家</h2>
+      <p class="dialog-copy" id="prologue-copy"></p>
+      <div class="birth-record" id="birth-record"></div>
+      <button class="primary-control ending-button" id="begin-life" type="button">人生を始める <span aria-hidden="true">→</span></button>
+    </dialog>
 
     <dialog class="decision-dialog" id="decision-dialog" aria-labelledby="decision-title">
       <div class="dialog-spark" aria-hidden="true">✦</div>
