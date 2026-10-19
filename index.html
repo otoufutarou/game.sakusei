@@ -76,6 +76,7 @@
         </div>
         <p class="family-line" id="people-value">家族</p>
         <button class="link-button" id="open-status-2" type="button">詳細ステータス ›</button>
+        <button class="link-button" id="open-spend" type="button">お金を使う ›</button>
         <section class="ability-panel" aria-labelledby="ability-heading">
           <header class="ability-heading">
             <h2 id="ability-heading">基礎能力</h2>
@@ -145,6 +146,11 @@
       <h2 id="decision-title">選択</h2>
       <p class="dialog-copy" id="decision-copy"></p>
       <div class="choice-list" id="choice-list"></div>
+      <form class="name-form" id="name-form" hidden>
+        <label for="name-input">自分で名前をつける</label>
+        <input id="name-input" type="text" maxlength="12" autocomplete="off" placeholder="名前（例：ミナ）" />
+        <button class="secondary-control" id="name-submit" type="submit">この名前にする</button>
+      </form>
     </dialog>
 
     <dialog class="game-dialog" id="result-dialog" aria-labelledby="result-title">
@@ -158,6 +164,12 @@
     <dialog class="game-dialog wide-dialog" id="status-dialog" aria-labelledby="status-title">
       <header class="dialog-bar"><h2 id="status-title">詳細ステータス</h2><button class="chip-button" data-close="status-dialog" type="button">閉じる</button></header>
       <div id="status-body" class="detail-body"></div>
+    </dialog>
+
+    <dialog class="game-dialog wide-dialog" id="spend-dialog" aria-labelledby="spend-title">
+      <header class="dialog-bar"><h2 id="spend-title">お金を使う</h2><button class="chip-button" data-close="spend-dialog" type="button">閉じる</button></header>
+      <p class="dialog-copy" id="spend-summary"></p>
+      <div class="choice-list" id="spend-list"></div>
     </dialog>
 
     <dialog class="game-dialog wide-dialog" id="money-dialog" aria-labelledby="money-title">

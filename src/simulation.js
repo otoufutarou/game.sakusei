@@ -51,6 +51,10 @@ export const TUNING = Object.freeze({
   homeRentLegacyG: 0.7,
   adultLivingCostLegacyG: 1.9,
   youthLivingCostLegacyG: 0.8,
+  lifestyleCostLegacyG: 0.12,
+  lifestyleCostRoleGrowth: 0.6,
+  homeUpkeepLegacyG: { small: 0.15, large: 0.5, estate: 2 },
+  petUpkeepLegacyG: 0.1,
   wageMultiplier: 0.8,
   scholarshipThresholds: { magic: 60, knight: 70, scholar: 70 },
   scholarshipLivingCostLegacyG: 12,
@@ -66,7 +70,7 @@ export const TUNING = Object.freeze({
     lossOnFailure: { small: 1, medium: 0.65, large: 0.4 },
   },
   sequelaRecovery: { cost: 40, chance: 0.35 },
-  routineLogIntervalYears: 3.4,
+  routineLogIntervalYears: 1.3,
   decisionMeanYears: 2.5,
   firstDecisionEarliestAge: 6,
   firstDecisionMeanYears: 1.2,
@@ -216,6 +220,8 @@ export const SKILL_IDS_LIST = [...new Set([
 const SKILL_GROWTH_BASE = 3.5;
 const SKILL_MONTH = 1 / 12;
 
+const friendNpc = (life) => (life.npcs ?? []).find((npc) => npc.alive && npc.relationship === "友人");
+
 const defineEvent = (id, category, requirements, text, effect, weight = 1) => ({
   id, category, requirements: { minAge: 0, ...requirements }, text, effect, weight,
 });
@@ -277,6 +283,45 @@ export const ROUTINE_EVENTS = [
   defineEvent("nation-council", "国家・戦争・冒険", { nationIds: ["forest"], minAge: 18, oncePerLife: true }, () => "長老会議で森の保護策が決まり、住民の採集と狩りの約束が変わった。", { fame: 2, flag: "forest-covenant" }),
   defineEvent("nation-empire-draft", "国家・戦争・冒険", { nationIds: ["empire"], minAge: 18, occupations: ["兵士", "冒険者", "農作業", "職人見習い"], oncePerLife: true }, () => "帝国の徴兵令が出され、家族や同僚と今後の暮らしを話し合った。", { fame: 1, flag: "empire-draft" }),
   defineEvent("nation-expedition", "国家・戦争・冒険", { minAge: 20, occupations: ["冒険者", "商人", "兵士"], oncePerLife: true }, () => "地図にない遺跡への遠征に加わり、仲間と協力して無事に帰還した。", { gold: 8, fame: 4, flag: "explored-ruins" }),
+  defineEvent("baby-first-words", "幼少期・日常", { minAge: 1, maxAge: 3, oncePerLife: true, excludeRaceIds: ["dragon"] }, () => "初めて言葉を口にして、家族みんなが笑顔になった。", { happy: 3 }, 2),
+  defineEvent("child-sibling-fight", "幼少期・日常", { minAge: 4, maxAge: 12, oncePerLife: true, custom: (life) => (life.siblings ?? 0) > 0 }, () => "兄弟とはじめて大喧嘩をして、親に二人そろって叱られた。", { happy: -2 }, 2),
+  defineEvent("child-sibling-play", "幼少期・日常", { minAge: 3, maxAge: 13, cooldownYears: 2, custom: (life) => (life.siblings ?? 0) > 0 }, () => "兄弟と日が暮れるまで遊び、泥だらけで帰って笑われた。", { happy: 2 }),
+  defineEvent("child-fire-magic", "幼少期・日常", { minAge: 6, maxAge: 11, oncePerLife: true, custom: (life) => life.mana !== undefined && life.mana >= 1 }, () => "親に内緒で火の魔法を使ってみたところ、見つかってこっぴどく怒られた。", { fame: 0, happy: -1 }, 2),
+  defineEvent("child-slime-play", "幼少期・日常", { minAge: 6, maxAge: 9, oncePerLife: true, excludeRaceIds: ["dragon"] }, () => "友達と一緒にスライムを棒でつついて遊んだ。", { relation: "friend", happy: 2 }, 2),
+  defineEvent("child-sword-practice", "幼少期・日常", { minAge: 6, maxAge: 10, oncePerLife: true, excludeRaceIds: ["dragon"] }, () => "父親と木の棒で剣の練習をしてみた。思ったより腕が重かった。", { happy: 2 }, 2),
+  defineEvent("child-monster-tale", "幼少期・日常", { minAge: 5, maxAge: 11, oncePerLife: true, excludeRaceIds: ["dragon"] }, () => "モンスターの話を聞いて、その日の夜はなかなか眠れなかった。", { happy: -1 }, 2),
+  defineEvent("child-night-stars", "幼少期・日常", { minAge: 5, maxAge: 14, oncePerLife: true }, () => "夜空いっぱいの星を見上げ、あの向こうには何があるのだろうと考えた。", { happy: 1 }),
+  defineEvent("child-stray-animal", "幼少期・日常", { minAge: 5, maxAge: 13, oncePerLife: true, excludeRaceIds: ["dragon"] }, () => "道端で見つけた迷子の子猫にこっそり食べ物を分けてやった。", { happy: 2 }),
+  defineEvent("child-festival", "幼少期・日常", { minAge: 4, maxAge: 15, cooldownYears: 2, excludeRaceIds: ["dragon"] }, (life) => `${life.home}の祭りで、屋台の甘い菓子を握りしめて歩き回った。`, { happy: 3 }),
+  defineEvent("child-chores", "幼少期・日常", { minAge: 5, maxAge: 13, cooldownYears: 2, excludeRaceIds: ["dragon"] }, () => "水汲みの手伝いを任され、初めて一人でやり遂げた。", { happy: 1 }),
+  defineEvent("child-scolded", "幼少期・日常", { minAge: 5, maxAge: 13, cooldownYears: 3, excludeRaceIds: ["dragon"] }, () => "いたずらが見つかって、夕食の前に長々と説教をされた。", { happy: -1 }),
+  defineEvent("child-winter-night", "幼少期・日常", { minAge: 3, maxAge: 12, cooldownYears: 3, excludeRaceIds: ["dragon"] }, () => "寒い夜、家族と暖炉を囲んで古い昔話を聞かせてもらった。", { happy: 2 }),
+  defineEvent("child-lost-in-town", "幼少期・日常", { minAge: 4, maxAge: 10, oncePerLife: true, excludeRaceIds: ["dragon"] }, () => "市場で迷子になり、泣きそうなところを見知らぬ人が親のもとへ連れていってくれた。", { happy: -1 }),
+
+  defineEvent("adult-noble-scandal", "噂・日常", { minAge: 18, cooldownYears: 3 }, () => "行商人の噂では、都会の貴族にスキャンダルがあったらしい。", { happy: 1 }),
+  defineEvent("adult-dungeon-talk", "噂・日常", { minAge: 18, cooldownYears: 3, custom: (life) => Boolean(friendNpc(life)) }, (life) => `友人の${friendNpc(life)?.name ?? "友"}と、新しく見つかったダンジョンの話で盛り上がった。`, { happy: 2 }),
+  defineEvent("adult-dragon-rumor", "噂・日常", { minAge: 16, cooldownYears: 4, excludeRaceIds: ["dragon"] }, () => "遠くの村にドラゴンが現れたらしい。恐ろしくて、その日はなかなか寝付けなかった。", { happy: -1 }),
+  defineEvent("adult-bard-song", "噂・日常", { minAge: 14, cooldownYears: 3, excludeRaceIds: ["dragon"] }, () => "旅の吟遊詩人が広場で歌い、遠い国の英雄の話に聞き入った。", { happy: 2 }),
+  defineEvent("adult-tax-collector", "噂・日常", { minAge: 18, cooldownYears: 4 }, () => "徴税官が村を訪れ、今年の税の話で皆が顔をしかめていた。", { happy: -1 }),
+  defineEvent("adult-harvest-feast", "噂・日常", { minAge: 16, cooldownYears: 2, excludeRaceIds: ["dragon"] }, (life) => `${life.home}の収穫祭で、皆と飲み食いして一年の労をねぎらった。`, { happy: 3 }),
+  defineEvent("adult-new-year", "噂・日常", { minAge: 16, cooldownYears: 2, excludeRaceIds: ["dragon"] }, () => "新年を迎え、これから一年の無事を静かに祈った。", { happy: 1 }),
+  defineEvent("adult-travel-merchant", "噂・日常", { minAge: 16, cooldownYears: 3, excludeRaceIds: ["dragon"] }, () => "珍しい品を積んだ旅の商人が町に立ち寄り、人だかりができていた。", { happy: 1 }),
+  defineEvent("adult-bad-weather", "噂・日常", { minAge: 16, cooldownYears: 3, excludeRaceIds: ["dragon"] }, () => "長雨が続き、屋根の修理や仕事の遅れに追われた。", { happy: -1 }),
+  defineEvent("adult-old-letter", "噂・日常", { minAge: 20, cooldownYears: 5, excludeRaceIds: ["dragon"] }, () => "故郷から便りが届き、懐かしい顔ぶれの近況を知った。", { happy: 2 }),
+
+  defineEvent("married-anniversary", "家族・人間関係", { minAge: 19, requiresFlag: "married", cooldownYears: 3, custom: (life) => Boolean(life.marriage) && (life.age - life.marriage.since) * life.race.multiplier >= 1 }, (life) => `配偶者の${life.spouse ?? "あの人"}と結婚して${Math.floor((life.age - life.marriage.since) * life.race.multiplier)}年が経った。`, { happy: 3 }),
+  defineEvent("child-first-words", "家族・人間関係", { minAge: 1, custom: (life) => livingChildren(life).some((npc) => npc.humanAge >= 0.5 && npc.humanAge <= 3) }, (life) => `子の${livingChildren(life).find((npc) => npc.humanAge >= 0.5 && npc.humanAge <= 3)?.name}が初めて言葉を話した。`, { happy: 6 }, 3),
+  defineEvent("child-first-steps", "家族・人間関係", { minAge: 1, custom: (life) => livingChildren(life).some((npc) => npc.humanAge >= 0.3 && npc.humanAge <= 2.5) }, (life) => `子の${livingChildren(life).find((npc) => npc.humanAge >= 0.3 && npc.humanAge <= 2.5)?.name}がよちよちと歩き始め、思わず手を差し伸べた。`, { happy: 5 }, 3),
+  defineEvent("child-starts-school", "家族・人間関係", { minAge: 6, custom: (life) => livingChildren(life).some((npc) => npc.humanAge >= 5.5 && npc.humanAge <= 8) }, (life) => `子の${livingChildren(life).find((npc) => npc.humanAge >= 5.5 && npc.humanAge <= 8)?.name}が新しい服で学び舎へ通い始めた。`, { happy: 3 }, 2),
+  defineEvent("child-helps-home", "家族・人間関係", { minAge: 8, cooldownYears: 3, custom: (life) => livingChildren(life).some((npc) => npc.humanAge >= 7 && npc.humanAge <= 14) }, (life) => `子の${livingChildren(life).find((npc) => npc.humanAge >= 7 && npc.humanAge <= 14)?.name}が家の手伝いを買って出て、少し頼もしくなった。`, { happy: 3 }),
+  defineEvent("child-growing-up", "家族・人間関係", { minAge: 10, cooldownYears: 3, custom: (life) => livingChildren(life).some((npc) => npc.humanAge >= 3 && npc.humanAge <= 15) }, (life) => `子の${livingChildren(life).find((npc) => npc.humanAge >= 3 && npc.humanAge <= 15)?.name}の背が伸び、去年の服がもう着られなくなっていた。`, { happy: 2 }),
+  defineEvent("parent-teaching", "家族・人間関係", { minAge: 10, maxAge: 40, cooldownYears: 3, custom: (life) => livingParents(life).length > 0 }, () => "親から昔の仕事の話を聞き、少し大人になった気がした。", { happy: 1 }),
+
+  defineEvent("elder-aching-joints", "老年期", { minAge: 55, cooldownYears: 3 }, () => "足腰の痛む日々が増えた。", { happy: -2 }, 2),
+  defineEvent("elder-memories", "老年期", { minAge: 60, cooldownYears: 3 }, () => "ふと昔の友人たちの顔を思い出し、窓の外を長く眺めていた。", { happy: 1 }, 2),
+  defineEvent("elder-slow-morning", "老年期", { minAge: 60, cooldownYears: 3 }, () => "朝の目覚めが早くなり、静かな庭で茶を飲む時間が好きになった。", { happy: 2 }),
+  defineEvent("elder-young-visitor", "老年期", { minAge: 55, cooldownYears: 4, custom: (life) => livingChildren(life).length > 0 }, () => "子や孫のような若者たちが訪ねてきて、昔話をせがまれた。", { happy: 3 }),
+  defineEvent("elder-eyesight", "老年期", { minAge: 65, cooldownYears: 5 }, () => "細かい文字が読みにくくなり、灯りを近づけるようになった。", { happy: -1 }),
 ];
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -444,6 +489,8 @@ export function createLife(random = Math.random) {
     journal: [],
     eventHistory: [],
     historyFlags: [],
+    happiness: 50,
+    spendHistory: {},
     relationships: [],
     illnessUntil: 0,
     illness: null,
@@ -642,6 +689,7 @@ export function applyRoutineEffect(life, event, random = Math.random) {
   life.gold = Math.max(0, life.gold + (effect.gold ?? 0));
   life.debt = Math.max(0, life.debt + (effect.debt ?? 0));
   life.fame = Math.max(0, life.fame + (effect.fame ?? 0));
+  if (effect.happy) adjustHappiness(life, effect.happy);
   if (event.id === "magic-first-spark" && !life.trainingPlan) life.educationStatus = "魔力が目覚めた";
   if (effect.health) {
     life.health = effect.health;
@@ -957,6 +1005,14 @@ export function livingChildren(life) {
     .filter((npc) => npc && npc.alive);
 }
 
+function childNeeding(life, predicate) {
+  return livingChildren(life).find(predicate) ?? null;
+}
+
+function pendingNamingChild(life) {
+  return childNeeding(life, (npc) => npc.nameDecided === false);
+}
+
 export function monthlyBudget(life, random = null) {
   const mods = worldModifiers(life);
   const working = life.age >= 13 && !(life.occupation === "まだ幼い子ども");
@@ -975,7 +1031,12 @@ export function monthlyBudget(life, random = null) {
   const familyCost = ((spouse ? 0.9 : 0) + children.reduce((sum, npc) => sum + ((npc.humanAge ?? 0) < 15 ? 0.5 : 0.3), 0)) * mods.price;
   const medical = life.health !== "健やか" && life.age >= 15 ? 0.5 * mods.price : 0;
   const interest = life.debt * 0.008;
-  const expenses = living + rent + familyCost + medical + interest;
+  const lifestyle = adult
+    ? TUNING.lifestyleCostLegacyG * (1 + TUNING.lifestyleCostRoleGrowth * (roleMultiplier(life) - 1)) * mods.price
+    : 0;
+  const upkeep = ((owned ? TUNING.homeUpkeepLegacyG[life.homeType ?? "small"] ?? 0 : 0)
+    + ((life.historyFlags ?? []).includes("has-pet") ? TUNING.petUpkeepLegacyG : 0)) * mods.price;
+  const expenses = living + rent + familyCost + medical + interest + lifestyle + upkeep;
   const income = work + spouseWork;
   const repayment = life.debt > 0 ? Math.min(life.debt, Math.max(0, (income - expenses) * 0.4)) : 0;
   const scholarshipRepayment = (life.scholarshipBalance ?? 0) > 0 && income - expenses - repayment >= income * TUNING.scholarshipRepaymentRate
@@ -983,7 +1044,7 @@ export function monthlyBudget(life, random = null) {
     : 0;
   return {
     income: { work, spouse: spouseWork },
-    expenses: { living, rent, family: familyCost, medical, interest },
+    expenses: { living, rent, family: familyCost, medical, interest, lifestyle, upkeep },
     repayment,
     scholarshipRepayment,
     totalIncome: income,
@@ -1069,6 +1130,7 @@ function processMonth(life, random) {
   } else {
     life.financialHardship = false;
   }
+  adjustHappiness(life, ((life.financialHardship ? 35 : 55) - (life.happiness ?? 50)) * 0.03);
   life.finance.totalIncome += budget.totalIncome;
   life.finance.totalExpense += budget.totalExpense + budget.repayment + budget.scholarshipRepayment;
   life.finance.lastMonth = { age: life.age, ...budget };
@@ -1217,7 +1279,7 @@ function growChild(life, npc, random, elapsed) {
   if (!npc.independent) {
     if (npc.humanAge >= 6 && npc.occupation === "幼児") npc.occupation = "学生";
     if (npc.humanAge >= 15 && npc.occupation === "学生") {
-      npc.occupation = randomItem(SPOUSE_WORK, random);
+      npc.occupation = randomItem(npc.education === "学院" ? ["教師", "魔術師", "騎士"] : SPOUSE_WORK, random);
       appendEvent(life, `子の${npc.name}が${npc.occupation}として働き始めた。`, "life", "家族", `child-work-${npc.id}`);
     }
     if (npc.humanAge >= 20 && npc.humanAge >= 15 && random() < 0.12 * elapsed) {
@@ -1431,7 +1493,10 @@ function advancePregnancy(life, random, months) {
       life.gold = Math.max(0, life.gold - 3);
       recordGold(life, "出産・育児の準備", -3);
       addFlag(life, "has-child");
-      appendEvent(life, `${spouse.name}との間に子の${child.name}が生まれた。`, "life", "出産", `childbirth-${child.id}`);
+      child.nameDecided = false;
+      adjustHappiness(life, 8);
+      appendEvent(life, `${spouse.name}との間に子が生まれた。名前を考えることになった。`, "life", "出産", `childbirth-${child.id}`);
+      life.nextDecisionAt = life.age;
     }
     return;
   }
@@ -1625,6 +1690,15 @@ const CHILDHOOD_CHOICE_REWARDS = Object.freeze({
 const steadyPreview = (detail, cost = "費用: なし") => [cost, detail];
 
 const CHOICE_RULES = {
+  "child-school-town": { cost: 6, preview: () => ["費用: 6G", "メリット: 基礎をしっかり学べる、親子の絆が深まる"] },
+  "child-school-academy": { cost: 50, preview: () => ["費用: 50G", "メリット: 将来の仕事の選択肢が広がる、親子の絆が深まる", "デメリット: 家計への負担が大きい"] },
+  "child-school-work": { preview: () => ["費用: なし", "メリット: 家計の助けになる", "デメリット: 子は少し不満に思うかもしれない"] },
+  "child-wedding-big": { cost: 30, preview: () => ["費用: 30G", "メリット: 子が大いに喜ぶ、名声+1、幸福度+4"] },
+  "child-wedding-small": { cost: 8, preview: () => ["費用: 8G", "メリット: 子が感謝する、幸福度+2"] },
+  "child-wedding-none": { preview: () => ["費用: なし", "デメリット: 子はやや寂しく思う"] },
+  "child-home-full": { cost: 80, preview: () => ["費用: 80G", "メリット: 子が持ち家を得る、親子の絆が深まる、名声+1"] },
+  "child-home-part": { cost: 30, preview: () => ["費用: 30G", "メリット: 子が感謝する"] },
+  "child-home-none": { preview: () => ["費用: なし", "デメリット: 子はやや距離を置くかもしれない"] },
   study: {
     preview: () => ["費用: なし", `メリット: 読み書き技能+${CHILDHOOD_CHOICE_REWARDS.studyLiteracy}、学習を継続`, "デメリット: 家業の手伝いによる収入・技能は得られない"],
   },
@@ -1822,6 +1896,73 @@ const training = (life) => Boolean(life.trainingPlan);
 const academyOptions = (life) => ["magic", "knight", "scholar"].some((kind) => !academyFunding(life, kind).reason);
 
 export const CHOICE_EVENTS = [
+  {
+    id: "choice-name-child", title: "子どもの名前", category: "家族・人間関係", weight: 10, priority: true,
+    requirements: { minAge: 0, custom: (life) => Boolean(pendingNamingChild(life)) },
+    copy: "新しい命が生まれた。この子に、どんな名前を贈ろう。",
+    prepare: (life, random, decision) => {
+      const child = pendingNamingChild(life);
+      decision.childId = child.id;
+      decision.nameInput = true;
+      const used = [...namesAlreadyUsed(life)];
+      const culture = NAME_CULTURES.find((item) => item.id === life.nameCulture) ?? null;
+      decision.candidates = [];
+      for (let i = 0; i < 3; i += 1) {
+        const candidate = generatePersonName(random, child.gender, { usedNames: used, surname: familySurname(life), culture }).name;
+        used.push(candidate);
+        decision.candidates.push(candidate);
+      }
+    },
+    choicesFor: (life, decision) => decision.candidates.map((name) => ({ label: `「${name}」と名付ける`, effect: `name-child:${name}` })),
+  },
+  {
+    id: "choice-child-school", title: "子の進学", category: "家族・人間関係", weight: 6, priority: true,
+    requirements: { minAge: 12, custom: (life) => Boolean(childNeeding(life, (npc) => npc.humanAge >= 11 && npc.humanAge <= 16 && !npc.independent && !npc.schoolDecided)) },
+    prepare: (life, random, decision) => {
+      const child = childNeeding(life, (npc) => npc.humanAge >= 11 && npc.humanAge <= 16 && !npc.independent && !npc.schoolDecided);
+      decision.childId = child.id;
+      decision.id = `choice-child-school-${child.id}`;
+      decision.copy = `子の${child.name}が進学を希望している。どこに通わせるか決めよう。`;
+    },
+    copy: "子が進学を希望している。",
+    choices: [
+      { label: "町の学び舎に通わせる", effect: "child-school-town" },
+      { label: "学院に通わせる", effect: "child-school-academy" },
+      { label: "家の仕事を手伝ってもらう", effect: "child-school-work" },
+    ],
+  },
+  {
+    id: "choice-child-wedding", title: "子の結婚", category: "家族・人間関係", weight: 6, priority: true,
+    requirements: { minAge: 30, custom: (life) => Boolean(childNeeding(life, (npc) => npc.maritalStatus === "既婚" && !npc.weddingDecided)) },
+    prepare: (life, random, decision) => {
+      const child = childNeeding(life, (npc) => npc.maritalStatus === "既婚" && !npc.weddingDecided);
+      decision.childId = child.id;
+      decision.id = `choice-child-wedding-${child.id}`;
+      decision.copy = `子の${child.name}が${child.spouseName ?? "大切な人"}と結婚する。結婚の費用を出すか決めよう。`;
+    },
+    copy: "子が結婚する。",
+    choices: [
+      { label: "盛大な式の費用を出す", effect: "child-wedding-big" },
+      { label: "ささやかな祝い金を渡す", effect: "child-wedding-small" },
+      { label: "気持ちだけ贈る", effect: "child-wedding-none" },
+    ],
+  },
+  {
+    id: "choice-child-home", title: "子の家", category: "家族・人間関係", weight: 5, priority: true,
+    requirements: { minAge: 35, custom: (life) => Boolean(childNeeding(life, (npc) => npc.independent && npc.humanAge >= 24 && !npc.homeDecided)) },
+    prepare: (life, random, decision) => {
+      const child = childNeeding(life, (npc) => npc.independent && npc.humanAge >= 24 && !npc.homeDecided);
+      decision.childId = child.id;
+      decision.id = `choice-child-home-${child.id}`;
+      decision.copy = `子の${child.name}が家を買おうとしている。資金を援助するか決めよう。`;
+    },
+    copy: "子が家を買おうとしている。",
+    choices: [
+      { label: "頭金を大きく援助する", effect: "child-home-full" },
+      { label: "少しだけ援助する", effect: "child-home-part" },
+      { label: "自分の力でやらせる", effect: "child-home-none" },
+    ],
+  },
   {
     id: "edu-childhood", title: "学びのはじまり", category: "幼少期・教育", weight: 5, priority: true,
     requirements: { minAge: 6, maxAge: 12, oncePerLife: true, excludeRaceIds: ["dragon"], custom: (life) => !training(life) },
@@ -2333,7 +2474,11 @@ function completeIllnessTreatment(life, choice, random) {
 export function applyChoice(life, choice, random = Math.random) {
   if (!life.active || !life.pendingDecision) return null;
   const decision = life.pendingDecision;
-  const selected = decision.choices.find((item) => item.effect === choice.effect);
+  let selected = decision.choices.find((item) => item.effect === choice.effect);
+  if (!selected && decision.nameInput && typeof choice.effect === "string" && choice.effect.startsWith("name-child:")
+    && choice.effect.slice("name-child:".length).trim()) {
+    selected = { effect: choice.effect, label: `「${choice.effect.slice("name-child:".length).trim().slice(0, 12)}」と名付ける` };
+  }
   if (!selected) return null;
   const availability = choiceAvailability(life, selected.effect);
   if (availability.disabledReason) return null;
@@ -2395,6 +2540,68 @@ export function applyChoice(life, choice, random = Math.random) {
       const charity = selected.effect.split(":")[1];
       life.will = { type: "charity", targetId: null, charity };
       message = `${charity}への寄付を指定する遺言を残した。`;
+      break;
+    }
+    case "name-child": {
+      const child = (life.npcs ?? []).find((npc) => npc.id === decision.childId);
+      const given = selected.effect.slice("name-child:".length).trim().slice(0, 12);
+      if (child && given) {
+        child.name = given.includes("・") ? given : `${given}・${child.surname ?? familySurname(life)}`;
+        child.nameDecided = true;
+        npcNote(life, child, "名前をつけてもらった");
+        addFlag(life, "named-child");
+        adjustHappiness(life, 5);
+        message = `生まれた子に「${child.name}」と名付けた。健やかな成長を祈った。`;
+      } else {
+        message = "名前はまだ決まらなかった。";
+      }
+      break;
+    }
+    case "child-school-town":
+    case "child-school-academy":
+    case "child-school-work": {
+      const child = (life.npcs ?? []).find((npc) => npc.id === decision.childId);
+      if (child) {
+        child.schoolDecided = true;
+        child.education = { "child-school-town": "町の学び舎", "child-school-academy": "学院", "child-school-work": "家業" }[effectType];
+        child.affinity = clamp((child.affinity ?? 50) + { "child-school-town": 8, "child-school-academy": 10, "child-school-work": -3 }[effectType], 0, 100);
+        npcNote(life, child, `進学: ${child.education}`);
+      }
+      message = effectType === "child-school-work"
+        ? `${child?.name ?? "子"}には進学させず、家の仕事を手伝ってもらうことにした。`
+        : `${child?.name ?? "子"}を${child?.education}に通わせることにした。`;
+      break;
+    }
+    case "child-wedding-big":
+    case "child-wedding-small":
+    case "child-wedding-none": {
+      const child = (life.npcs ?? []).find((npc) => npc.id === decision.childId);
+      if (child) {
+        child.weddingDecided = true;
+        child.affinity = clamp((child.affinity ?? 50) + { "child-wedding-big": 12, "child-wedding-small": 6, "child-wedding-none": -6 }[effectType], 0, 100);
+        npcNote(life, child, "結婚の祝いを受けた");
+      }
+      if (effectType === "child-wedding-big") { life.fame += 1; adjustHappiness(life, 4); }
+      if (effectType === "child-wedding-small") adjustHappiness(life, 2);
+      message = effectType === "child-wedding-none"
+        ? `${child?.name ?? "子"}の結婚を、言葉だけで祝った。`
+        : `${child?.name ?? "子"}の結婚を祝い、費用を援助した。`;
+      break;
+    }
+    case "child-home-full":
+    case "child-home-part":
+    case "child-home-none": {
+      const child = (life.npcs ?? []).find((npc) => npc.id === decision.childId);
+      if (child) {
+        child.homeDecided = true;
+        child.affinity = clamp((child.affinity ?? 50) + { "child-home-full": 15, "child-home-part": 8, "child-home-none": -4 }[effectType], 0, 100);
+        if (effectType !== "child-home-none") child.ownsHome = true;
+        npcNote(life, child, "家を買う際の援助について話した");
+      }
+      if (effectType === "child-home-full") life.fame += 1;
+      message = effectType === "child-home-none"
+        ? `${child?.name ?? "子"}には自分の力で家を探してもらうことにした。`
+        : `${child?.name ?? "子"}の家の購入資金を援助した。`;
       break;
     }
     case "help":
@@ -3209,6 +3416,176 @@ function monthlyUpdate(life, random) {
     const settle = (55 - life.marriage.harmony) * 0.006;
     adjustHarmony(life, strain + settle + (random() - 0.5) * 2.6);
   }
+}
+
+// ---------------------------------------------------------------- free spending ("お金を使う")
+
+const adjustHappiness = (life, delta) => {
+  life.happiness = clamp((life.happiness ?? 50) + delta, 0, 100);
+};
+
+const hasFlag = (life, flag) => (life.historyFlags ?? []).includes(flag);
+const youngestChild = (life) => [...livingChildren(life)].sort((a, b) => (a.humanAge ?? 0) - (b.humanAge ?? 0))[0] ?? null;
+
+export const SPEND_OPTIONS = Object.freeze([
+  {
+    id: "family-trip", label: "家族旅行に行く", cost: 8, cooldownYears: 2,
+    check: (life) => (spouseNpc(life) || livingChildren(life).length ? null : "一緒に出かける家族がいない"),
+    effects: "幸福度+12、家族との関係が良くなる",
+    apply: (life) => {
+      adjustHappiness(life, 12);
+      if (life.marriage) adjustHarmony(life, 6);
+      for (const child of livingChildren(life)) child.affinity = clamp((child.affinity ?? 50) + 5, 0, 100);
+      return "家族みんなで旅に出て、見知らぬ町で思い出をつくった。";
+    },
+  },
+  {
+    id: "buy-books", label: "参考書を買う", cost: 5, cooldownYears: 1,
+    check: (life) => (life.age < 6 ? "まだ本を読める年ではない" : null),
+    effects: "仕事の技能+1.5、読み書き+1",
+    apply: (life) => {
+      addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 1.5, "参考書");
+      addSkillPoints(life, "literacy", 1, "参考書");
+      adjustHappiness(life, 2);
+      return "新しい参考書を買い、夜ごとに少しずつ読み進めた。";
+    },
+  },
+  {
+    id: "repair-home", label: "家を修復する", cost: 6, cooldownYears: 3,
+    check: (life) => (!life.ownsHome ? "持ち家がない" : (life.homeRepairs ?? 0) >= 3 ? "これ以上修復する必要がない" : null),
+    effects: "住居評価額+10%（最大3回）、幸福度+5",
+    apply: (life) => {
+      life.homeRepairs = (life.homeRepairs ?? 0) + 1;
+      life.homeValue = (life.homeValue ?? 0) * 1.1;
+      adjustHappiness(life, 5);
+      return "傷んだ屋根や壁を直し、家が見違えるように整った。";
+    },
+  },
+  {
+    id: "keep-pet", label: "ペットを飼う", cost: 10, oncePerLife: true,
+    check: (life) => (life.age < 10 ? "まだ世話を任せられない" : hasFlag(life, "has-pet") ? "すでにペットを飼っている" : null),
+    effects: `幸福度+10、毎月の世話代${TUNING.petUpkeepLegacyG}G`,
+    apply: (life) => {
+      addFlag(life, "has-pet");
+      adjustHappiness(life, 10);
+      return "小さな相棒を家に迎えた。賑やかな毎日が始まった。";
+    },
+  },
+  {
+    id: "hot-spring", label: "温泉で療養する", cost: 12, cooldownYears: 2,
+    check: (life) => (life.age < 15 ? "子どもには必要ない" : null),
+    effects: "不調なら回復、幸福度+6",
+    apply: (life) => {
+      if (["療養中", "回復中"].includes(life.health)) { life.health = "健やか"; life.illnessUntil = life.age; }
+      adjustHappiness(life, 6);
+      return "湯治場でゆっくり過ごし、体も心もほぐれた。";
+    },
+  },
+  {
+    id: "party", label: "友人を招いて宴を開く", cost: 4, cooldownYears: 1,
+    check: (life) => (life.age < 14 ? "まだ宴を開く年ではない" : null),
+    effects: "幸福度+6、友人が増える、名声+1",
+    apply: (life) => {
+      addRelationship(life, "friend");
+      life.fame += 1;
+      adjustHappiness(life, 6);
+      return "友人たちを招いて宴を開き、夜更けまで笑い合った。";
+    },
+  },
+  {
+    id: "spouse-gift", label: "配偶者に贈り物をする", cost: 6, cooldownYears: 1,
+    check: (life) => (life.marriage ? null : "配偶者がいない"),
+    effects: "夫婦仲が良くなる、幸福度+4",
+    apply: (life) => {
+      adjustHarmony(life, 10);
+      adjustHappiness(life, 4);
+      return `${life.spouse ?? "配偶者"}に心のこもった贈り物を選び、喜んでもらえた。`;
+    },
+  },
+  {
+    id: "new-gear", label: "道具や装備を新調する", cost: 14, cooldownYears: 4,
+    check: (life) => (life.age < 13 ? "まだ必要ない" : null),
+    effects: "仕事の技能+2、危険な仕事で身を守りやすい",
+    apply: (life) => {
+      addFlag(life, "good-gear");
+      addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 2, "道具の新調");
+      return "新しい道具を揃え、仕事の手際が良くなった。";
+    },
+  },
+  {
+    id: "temple-donation", label: "神殿へ寄付する", cost: 10, cooldownYears: 2,
+    check: (life) => (life.age < 15 ? "まだ寄付できる年ではない" : null),
+    effects: "名声+2、幸福度+3",
+    apply: (life) => {
+      life.fame += 2;
+      adjustHappiness(life, 3);
+      return "神殿に寄付をし、人々から感謝された。";
+    },
+  },
+  {
+    id: "child-gift", label: "子どもに贈り物をする", cost: 5, cooldownYears: 1,
+    check: (life) => (youngestChild(life) ? null : "子どもがいない"),
+    effects: "子の親愛+10、幸福度+5",
+    apply: (life) => {
+      const child = youngestChild(life);
+      child.affinity = clamp((child.affinity ?? 50) + 10, 0, 100);
+      adjustHappiness(life, 5);
+      return `${child.name}に贈り物をすると、満面の笑みを見せてくれた。`;
+    },
+  },
+]);
+
+function spendCost(life, option) {
+  return Math.round(option.cost * worldModifiers(life).price * 10) / 10;
+}
+
+function spendUnavailableReason(life, option) {
+  if (!life.active || !life.started) return "今は選べない";
+  if (life.pendingDecision) return "先に選択を済ませる必要がある";
+  const reason = option.check?.(life);
+  if (reason) return reason;
+  const last = life.spendHistory?.[option.id];
+  if (option.cooldownYears && last !== undefined && life.age - last < option.cooldownYears) return "最近すでに行った";
+  const cost = spendCost(life, option);
+  if ((life.gold ?? 0) < cost) return `所持金が足りない（必要${gold(cost)}／所持${gold(Math.floor(life.gold ?? 0))}）`;
+  return null;
+}
+
+export function spendOptions(life) {
+  return SPEND_OPTIONS.map((option) => {
+    const cost = spendCost(life, option);
+    return {
+      id: option.id,
+      label: option.label,
+      cost,
+      preview: [`費用: ${gold(cost)}`, `効果: ${option.effects}`],
+      disabledReason: spendUnavailableReason(life, option),
+    };
+  });
+}
+
+export function spendMoney(life, id) {
+  const option = SPEND_OPTIONS.find((item) => item.id === id);
+  if (!option || spendUnavailableReason(life, option)) return null;
+  const cost = spendCost(life, option);
+  const before = { gold: life.gold, fame: life.fame, health: life.health, happiness: life.happiness ?? 50, skills: { ...ensureSkillState(life) } };
+  life.gold -= cost;
+  recordGold(life, option.label, -cost);
+  life.spendHistory ??= {};
+  life.spendHistory[id] = life.age;
+  const message = option.apply(life);
+  const details = [`所持金-${cost}G`];
+  if (life.fame !== before.fame) details.push(`名声+${life.fame - before.fame}`);
+  if (life.health !== before.health) details.push(`健康${before.health}→${life.health}`);
+  const happy = Math.round((life.happiness ?? 50) - before.happiness);
+  if (happy) details.push(`幸福度${happy > 0 ? "+" : ""}${happy}`);
+  for (const [skill, level] of Object.entries(life.skills)) {
+    const delta = level - (before.skills[skill] ?? 0);
+    if (Math.abs(delta) > 1e-9) details.push(`${skillName(skill)}技能+${delta.toFixed(1)}`);
+  }
+  life.lastResult = { title: "お金を使う", choice: option.label, message, details, age: life.age };
+  appendEvent(life, `${message}（${details.join("、")}）`, "life", "出費", `spend-${id}`);
+  return life.lastResult;
 }
 
 export function advanceLife(life, humanYears, random = Math.random) {

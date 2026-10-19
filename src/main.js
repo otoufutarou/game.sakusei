@@ -1,5 +1,5 @@
 import {
-  actualAge, advanceLife, chooseDecision, createLife, formatGold, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST,
+  actualAge, advanceLife, chooseDecision, createLife, formatGold, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST, spendMoney, spendOptions,
 } from "./simulation.js";
 import { characterSprite, drawJourney, lifeStage, livingFamily } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
@@ -46,6 +46,11 @@ const elements = {
   resultDialog: $("#result-dialog"),
   statusDialog: $("#status-dialog"),
   statusBody: $("#status-body"),
+  spendDialog: $("#spend-dialog"),
+  spendSummary: $("#spend-summary"),
+  spendList: $("#spend-list"),
+  nameForm: $("#name-form"),
+  nameInput: $("#name-input"),
   moneyDialog: $("#money-dialog"),
   moneyBody: $("#money-body"),
   endingDialog: $("#ending-dialog"),
@@ -314,6 +319,7 @@ function renderStatus() {
     ["教育状態", life.educationStatus ?? "-"],
     ["健康", life.health],
     ["所持金", money(life.gold)],
+    ["幸福度", `${Math.round(life.happiness ?? 50)}／100`],
     ["借金", money(life.debt)],
     ["奨学金残高", money(life.scholarshipBalance ?? 0)],
     ["住居評価額", life.ownsHome ? money(life.homeValue ?? 0) : "借家"],
@@ -374,6 +380,8 @@ function renderMoney() {
     ["生活費", `-${money(budget.expenses.living)}`],
     ["家賃", `-${money(budget.expenses.rent)}`],
     ["家族の支出", `-${money(budget.expenses.family)}`],
+    ["交際費・その他", `-${money(budget.expenses.lifestyle ?? 0)}`],
+    ["住居・ペットの維持費", `-${money(budget.expenses.upkeep ?? 0)}`],
     ["医療費", `-${money(budget.expenses.medical)}`],
     ["借金の利息", `-${money(budget.expenses.interest)}`],
     ["借金の返済", `-${money(budget.repayment)}`],
@@ -396,6 +404,37 @@ function openStatus() {
   if (!elements.statusDialog.open) elements.statusDialog.showModal();
 }
 
+function renderSpend() {
+  elements.spendSummary.textContent = `所持金 ${money(life.gold)}　幸福度 ${Math.round(life.happiness ?? 50)}／100　余裕のあるお金で、暮らしを豊かにできます。`;
+  elements.spendList.replaceChildren();
+  for (const option of spendOptions(life)) {
+    const button = element("button", "choice-button");
+    button.type = "button";
+    button.append(element("strong", "", option.label));
+    const list = element("ul");
+    for (const line of option.preview) list.append(element("li", "", line));
+    button.append(list);
+    if (option.disabledReason) {
+      button.disabled = true;
+      button.append(element("span", "reason", `選べません：${option.disabledReason}`));
+    }
+    button.addEventListener("click", () => {
+      if (!spendMoney(life, option.id)) return;
+      addJournalEvents();
+      updateLifeDisplay();
+      renderSpend();
+      showResult();
+      save(true);
+    });
+    elements.spendList.append(button);
+  }
+}
+
+function openSpend() {
+  renderSpend();
+  if (!elements.spendDialog.open) elements.spendDialog.showModal();
+}
+
 function openMoney() {
   renderMoney();
   if (!elements.moneyDialog.open) elements.moneyDialog.showModal();
@@ -409,6 +448,8 @@ function showDecision() {
   elements.decisionTitle.textContent = decision.title;
   elements.decisionCopy.textContent = decision.copy;
   elements.choices.replaceChildren();
+  elements.nameForm.hidden = !decision.nameInput;
+  elements.nameInput.value = "";
   for (const choice of decision.choices) {
     const button = element("button", "choice-button");
     button.type = "button";
@@ -569,7 +610,7 @@ elements.play.addEventListener("click", () => {
   save(true);
 });
 document.querySelectorAll("dialog").forEach((dialog) => {
-  if (!["status-dialog", "money-dialog"].includes(dialog.id)) dialog.addEventListener("cancel", (event) => event.preventDefault());
+  if (!["status-dialog", "money-dialog", "spend-dialog"].includes(dialog.id)) dialog.addEventListener("cancel", (event) => event.preventDefault());
 });
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.getElementById(button.dataset.close).close()));
 $("#close-result").addEventListener("click", () => elements.resultDialog.close());
@@ -599,6 +640,20 @@ elements.resumeLife.addEventListener("click", resumeLife);
 $("#open-status").addEventListener("click", openStatus);
 $("#open-status-2").addEventListener("click", openStatus);
 $("#open-money").addEventListener("click", openMoney);
+$("#open-spend").addEventListener("click", openSpend);
+elements.nameForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = elements.nameInput.value.trim();
+  if (!name || !life.pendingDecision?.nameInput) return;
+  if (!chooseDecision(life, `name-child:${name}`, random)) return;
+  currentDecisionId = null;
+  elements.decisionDialog.close();
+  addJournalEvents();
+  updateLifeDisplay();
+  updateControls();
+  showResult();
+  save(true);
+});
 const openHistory = () => {
   elements.historyPage.hidden = false;
   renderHistory();
