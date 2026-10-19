@@ -60,6 +60,7 @@ let lastTimestamp = 0;
 let lastSceneKey = null;
 let lastSaveAt = 0;
 let previousAbilityValues = {};
+const abilityChangeTimers = new WeakMap();
 let fastForwardToDecision = false;
 let currentDecisionId = null;
 let random = Math.random;
@@ -152,7 +153,13 @@ function resetView() {
   lastTimestamp = 0;
   lastSceneKey = null;
   previousAbilityValues = {};
-  for (const row of elements.abilityRows.values()) row.querySelector("[data-stat-change]").textContent = "";
+  for (const row of elements.abilityRows.values()) {
+    const changeNode = row.querySelector("[data-stat-change]");
+    const timer = abilityChangeTimers.get(changeNode);
+    if (timer !== undefined) clearTimeout(timer);
+    abilityChangeTimers.delete(changeNode);
+    changeNode.textContent = "";
+  }
   fastForwardToDecision = false;
   currentDecisionId = null;
   elements.eventList.replaceChildren();
@@ -260,9 +267,13 @@ function updateBaseAbilities(stats) {
       changeNode.dataset.changeId = String(changeId);
       changeNode.textContent = text;
       changeNode.classList.toggle("decrease", delta < 0);
-      setTimeout(() => {
+      const previousTimer = abilityChangeTimers.get(changeNode);
+      if (previousTimer !== undefined) clearTimeout(previousTimer);
+      const timer = setTimeout(() => {
         if (changeNode.dataset.changeId === String(changeId)) changeNode.textContent = "";
+        abilityChangeTimers.delete(changeNode);
       }, 1800);
+      abilityChangeTimers.set(changeNode, timer);
     }
     previousAbilityValues[key] = value;
   }

@@ -733,6 +733,7 @@ test("academies check family funds, scholarships, status and talent", () => {
   assert.equal(familyFunded.cost, 60);
   const noble = adultLife(4, { age: 15, gold: 1, status: { name: "貴族" } }).life;
   assert.equal(choiceAvailability(noble, "academy-knight").disabledReason, null);
+  assert.equal(choiceAvailability(noble, "academy-knight").payer, "player", "noble family funding is not charged to a missing parent balance");
 });
 
 test("primary education uses parental funds and keeps its preview to two lines", () => {

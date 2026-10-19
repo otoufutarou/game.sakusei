@@ -1575,6 +1575,7 @@ function mentorQuality(random) {
 const STATUS_BARRED = ["奴隷", "無戸籍・流民"];
 const POOR_STATUS = ["奴隷"];
 const ACADEMY_YEARS = Object.freeze({ magic: 6, knight: 5, scholar: 6 });
+const EDUCATION = Object.freeze({ primaryTuition: 4, tutorTuition: 12, primaryYears: 4 });
 
 function ruleCost(life, rule) {
   return typeof rule.cost === "function" ? rule.cost(life) : rule.cost ?? 0;
@@ -1624,12 +1625,12 @@ const CHOICE_RULES = {
   },
   "edu-town-school": {
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で町の教室に通えない" : null),
-    cost: 4,
+    cost: EDUCATION.primaryTuition,
     payer: "parents",
-    preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, "メリット: 読み書きの基礎を4年間学ぶ／デメリット: 家族の蓄えを使う"],
+    preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, `メリット: 読み書きの基礎を${EDUCATION.primaryYears}年間学ぶ／デメリット: 家族の蓄えを使う`],
   },
   "edu-tutor": {
-    cost: 12,
+    cost: EDUCATION.tutorTuition,
     payer: "parents",
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で家庭教師を雇えない" : null),
     preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
@@ -2308,6 +2309,7 @@ export function applyChoice(life, choice, random = Math.random) {
   const result = { cost: availability.cost };
   if (availability.cost > 0) {
     if (availability.payer === "parents") {
+      if ((life.parents?.gold ?? 0) < availability.cost) return null;
       life.parents.gold -= availability.cost;
       notes.push(`親の財産から${gold(availability.cost)}を支払った`);
     } else {
@@ -2743,7 +2745,7 @@ export function applyChoice(life, choice, random = Math.random) {
     case "edu-town-school":
       startTraining(life, random, {
         kind: "school", name: "町の教室での学び", skill: "literacy", activity: 0.5, learning: 1,
-        years: 4, status: "町の教室に在籍中", school: { id: "local-school", name: "町の教室" },
+        years: EDUCATION.primaryYears, status: "町の教室に在籍中", school: { id: "local-school", name: "町の教室" },
       });
       addFlag(life, "school-attendance");
       message = "町の教室に通い、読み書きを学び始めた。";
