@@ -50,7 +50,10 @@ export const TUNING = Object.freeze({
   currency: { silverPerLegacyG: 30 },
   homePricesLegacyG: { small: 120, large: 400, estate: 50000 / 30 },
   homeResaleRange: [0.7, 0.9],
-  homeRentLegacyG: 0.5,
+  homeRentLegacyG: 0.7,
+  adultLivingCostLegacyG: 1.9,
+  youthLivingCostLegacyG: 0.8,
+  wageMultiplier: 0.8,
   scholarshipThresholds: { magic: 60, knight: 70, scholar: 70 },
   scholarshipLivingCostLegacyG: 12,
   scholarshipRepaymentRate: 0.1,
@@ -229,12 +232,12 @@ export const ROUTINE_EVENTS = [
   defineEvent("child-apprentice-lesson", "幼少期・教育", { minAge: 10, maxAge: 20, occupations: ["まだ幼い子ども", "家業の手伝い"], oncePerLife: true }, () => "近所の職人が作業を見せてくれ、道具の名前と安全な扱い方を覚えた。", { skill: 2, flag: "craft-curious" }),
 
   defineEvent("career-first-work", "職業・昇進", { minAge: 13, maxAge: 25, occupations: ["まだ幼い子ども"], oncePerLife: true }, () => "家族の紹介で初めての仕事を得て、見習いとして働き始めた。", { action: "start-work" }),
-  defineEvent("career-apprentice-task", "職業・昇進", { minAge: 13, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"] }, () => "任された品を期限までに仕上げ、親方から次の工程を教わった。", { skill: 2, gold: 2 }),
-  defineEvent("career-harvest", "職業・昇進", { minAge: 13, occupations: ["農作業", "家業の手伝い"] }, () => "豊作の年を迎え、仲間と収穫を終えて賃金と分け前を受け取った。", { gold: 5, skill: 1 }),
+  defineEvent("career-apprentice-task", "職業・昇進", { minAge: 13, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"] }, () => "任された品を期限までに仕上げ、親方から次の工程を教わった。", { skill: 2, gold: 1 }),
+  defineEvent("career-harvest", "職業・昇進", { minAge: 13, occupations: ["農作業", "家業の手伝い"] }, () => "豊作の年を迎え、仲間と収穫を終えて賃金と分け前を受け取った。", { gold: 3, skill: 1 }),
   defineEvent("career-mentor", "職業・昇進", { minAge: 18, minimumSkill: 20 }, () => "仕事の経験を買われ、後輩に道具の扱いを教える役目を任された。", { fame: 2, flag: "mentored-worker" }),
-  defineEvent("career-promotion", "職業・昇進", { minAge: 18, minimumSkill: 40 }, () => "積み重ねた仕事ぶりが評価され、より大きな責任を伴う役目を得た。", { fame: 3, gold: 4, flag: "promotion-earned" }),
+  defineEvent("career-promotion", "職業・昇進", { minAge: 18, minimumSkill: 40 }, () => "積み重ねた仕事ぶりが評価され、より大きな責任を伴う役目を得た。", { fame: 3, gold: 2, flag: "promotion-earned" }),
   defineEvent("career-guild-license", "職業・昇進", { minAge: 18, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"], minimumSkill: 40 }, () => "組合の技能試験に合格し、独りで仕事を受ける資格を得た。", { skill: 2, fame: 3, flag: "guild-license" }),
-  defineEvent("career-new-client", "職業・昇進", { minAge: 18, minimumSkill: 20 }, (life) => `${life.nation.name}の遠方から新しい依頼が届き、仕事の評判が広がった。`, { gold: 6, fame: 1 }),
+  defineEvent("career-new-client", "職業・昇進", { minAge: 18, minimumSkill: 20 }, (life) => `${life.nation.name}の遠方から新しい依頼が届き、仕事の評判が広がった。`, { gold: 3, fame: 1 }),
   defineEvent("career-independent-shop", "職業・昇進", { minAge: 25, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"], minimumSkill: 60, minimumGold: 25, oncePerLife: true }, () => "貯金と腕を頼りに小さな工房を借り、自分の看板を掲げた。", { gold: -15, fame: 5, flag: "independent-craftsperson", action: "open-workshop" }),
   defineEvent("career-job-change", "職業・昇進", { minAge: 22, occupations: ["兵士", "冒険者"], oncePerLife: true }, () => "危険の多い任務に区切りをつけ、経験を生かせる別の仕事へ移った。", { action: "career-change", fame: 1 }),
   defineEvent("career-retirement", "職業・昇進", { minAge: 65, minimumSkill: 60, oncePerLife: true }, () => "長年の仕事に一区切りをつけるか、続けるかを考える時期になった。", { flag: "retirement-reminder" }),
@@ -254,7 +257,7 @@ export const ROUTINE_EVENTS = [
   defineEvent("love-quarrel", "恋愛・結婚", { minAge: 18, requiresFlag: "married", cooldownYears: 2 }, (life) => `${life.spouse ?? "配偶者"}と些細なことで言い争い、気まずい日が続いた。`, { action: "harmony-down", flag: "marital-strain" }, 0.9),
   defineEvent("love-family-celebration", "恋愛・結婚", { minAge: 22, requiresFlag: "married" }, () => "家族の節目を祝う小さな集まりを開き、親しい人たちと喜びを分かち合った。", { fame: 1, gold: -2 }),
 
-  defineEvent("wealth-market-profit", "財産・借金", { minAge: 18, minimumGold: 8 }, (life) => `蓄えを生かして${life.nation.name}の市で品を仕入れ、利益を得た。`, { gold: 10, fame: 1 }),
+  defineEvent("wealth-market-profit", "財産・借金", { minAge: 18, minimumGold: 8 }, (life) => `蓄えを生かして${life.nation.name}の市で品を仕入れ、利益を得た。`, { gold: 2, fame: 1 }),
   defineEvent("wealth-bad-harvest", "財産・借金", { minAge: 15, oncePerLife: true }, () => "不作で食料の値が上がり、冬を越すために蓄えを切り崩した。", { gold: -8, flag: "survived-famine" }),
   defineEvent("wealth-loan", "財産・借金", { minAge: 18, maximumGold: 5, oncePerLife: true }, () => "商人から少額融資の申し出があったが、借入は本人が選ぶことにした。", { flag: "loan-offer" }),
   defineEvent("wealth-repay-debt", "財産・借金", { minAge: 18, minimumGold: 12, requiresFlag: "small-loan", oncePerLife: true }, () => "少しずつ返してきた借金を完済し、帳面から名前を消してもらった。", { gold: -12, debt: -12, action: "clear-loan" }),
@@ -1013,15 +1016,16 @@ export function livingChildren(life) {
 export function monthlyBudget(life, random = null) {
   const mods = worldModifiers(life);
   const working = life.age >= 13 && !(life.occupation === "まだ幼い子ども");
-  let work = working ? (OCCUPATION_INCOME[life.occupation] ?? 1) * roleMultiplier(life) * (1 + (life.occupationSkill ?? 0) / 200) : 0;
+  let work = working ? (OCCUPATION_INCOME[life.occupation] ?? 1) * roleMultiplier(life)
+    * (1 + (life.occupationSkill ?? 0) / 200) * TUNING.wageMultiplier : 0;
   work *= working ? mods.incomeFor(life.occupation) : 1;
   work += life.businessRevenue ?? 0;
   if (random && life.occupation === "冒険者") work *= 0.4 + 1.2 * random();
   const spouse = spouseNpc(life);
-  const spouseWork = spouse ? (OCCUPATION_INCOME[spouse.occupation] ?? 1) * 0.9 * mods.incomeFor(spouse.occupation) : 0;
+  const spouseWork = spouse ? (OCCUPATION_INCOME[spouse.occupation] ?? 1) * 0.9 * TUNING.wageMultiplier * mods.incomeFor(spouse.occupation) : 0;
   const owned = Boolean(life.ownsHome);
   const adult = life.age >= 18;
-  const living = (life.age < 15 ? 0 : life.age < 18 ? 0.6 : 1.4) * mods.price;
+  const living = (life.age < 15 ? 0 : life.age < 18 ? TUNING.youthLivingCostLegacyG : TUNING.adultLivingCostLegacyG) * mods.price;
   const rent = adult && !owned ? TUNING.homeRentLegacyG * mods.price : 0;
   const children = livingChildren(life).filter((npc) => !npc.independent);
   const familyCost = ((spouse ? 0.9 : 0) + children.reduce((sum, npc) => sum + ((npc.humanAge ?? 0) < 15 ? 0.5 : 0.3), 0)) * mods.price;
@@ -1545,6 +1549,9 @@ function academyFunding(life, kind) {
     if (!eligible) return { reason: "騎士学院は貴族・市民の子、または領主の推薦が必要" };
   }
   if (["王族", "貴族"].includes(status)) return { cost: 0, via: "家が学費を負担", label: config.label };
+  if ((life.parents?.gold ?? 0) >= config.fee) {
+    return { cost: config.fee, payer: "parents", via: "親の財産から学費を負担", label: config.label };
+  }
   if (scholarship) {
     return {
       cost: 0,
@@ -1570,6 +1577,14 @@ const ACADEMY_YEARS = Object.freeze({ magic: 6, knight: 5, scholar: 6 });
 
 function ruleCost(life, rule) {
   return typeof rule.cost === "function" ? rule.cost(life) : rule.cost ?? 0;
+}
+
+function rulePayer(life, rule) {
+  return typeof rule.payer === "function" ? rule.payer(life) : rule.payer ?? "player";
+}
+
+function availableFunds(life, payer) {
+  return payer === "parents" ? life.parents?.gold ?? 0 : life.gold ?? 0;
 }
 
 const toSilver = (value) => Math.round(value * TUNING.currency.silverPerLegacyG);
@@ -1601,12 +1616,15 @@ const CHOICE_RULES = {
   "edu-town-school": {
     cost: 0,
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で町の教室に通えない" : null),
-    preview: () => ["費用: 無料", "成長する技能: 読み書き", "期間: 人間換算4年間", "環境: 通常の教室（学習環境×1.0）", "メリット: 読み書きの基礎が身につく"],
+    cost: 4,
+    payer: "parents",
+    preview: () => ["費用: 家族負担4G", "メリット: 読み書きの基礎が身につく／デメリット: 家族の蓄えを使う"],
   },
   "edu-tutor": {
     cost: 12,
+    payer: "parents",
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で家庭教師を雇えない" : null),
-    preview: () => ["費用: 12G", "成長する技能: 読み書き", "期間: 12歳ごろまで", "環境: 良い師匠（学習環境×1.4）", "メリット: 早く確実に学べる", "デメリット: 費用が高い"],
+    preview: () => ["費用: 家族負担12G", "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
   },
   "edu-family-work": {
     preview: () => ["費用: なし", "成長する技能: 肉体労働・読み書き（独学）", "メリット: 家計を助けられる", "デメリット: 読み書きの習得が遅い"],
@@ -1650,6 +1668,7 @@ const CHOICE_RULES = {
   },
   "academy-magic": {
     cost: (life) => academyFunding(life, "magic").cost ?? 60,
+    payer: (life) => academyFunding(life, "magic").payer,
     check: (life) => academyFunding(life, "magic").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "magic");
@@ -1658,6 +1677,7 @@ const CHOICE_RULES = {
   },
   "academy-knight": {
     cost: (life) => academyFunding(life, "knight").cost ?? 50,
+    payer: (life) => academyFunding(life, "knight").payer,
     check: (life) => academyFunding(life, "knight").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "knight");
@@ -1666,6 +1686,7 @@ const CHOICE_RULES = {
   },
   "academy-scholar": {
     cost: (life) => academyFunding(life, "scholar").cost ?? 40,
+    payer: (life) => academyFunding(life, "scholar").payer,
     check: (life) => academyFunding(life, "scholar").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "scholar");
@@ -1915,7 +1936,9 @@ export const CHOICE_EVENTS = [
     choicesFor: (life) => {
       const spouse = spouseNpc(life);
       const children = livingChildren(life);
-      const contacts = (life.npcs ?? []).filter((npc) => npc.alive && npc.id !== spouse?.id && !children.some((child) => child.id === npc.id));
+      const contacts = (life.npcs ?? []).filter((npc) => npc.alive && npc.id !== spouse?.id
+        && npc.relationship !== "友人" && !children.some((child) => child.id === npc.id));
+      const friends = (life.npcs ?? []).filter((npc) => npc.alive && npc.relationship === "友人");
       return [
         { label: "通常の相続にする", effect: "will-legal" },
         ...(spouse ? [{ label: `${spouse.name}に全額`, effect: "will-spouse" }] : []),
@@ -1923,6 +1946,7 @@ export const CHOICE_EVENTS = [
           { label: `${[...children].sort((a, b) => b.humanAge - a.humanAge)[0].name}に全額`, effect: "will-oldest-child" },
           { label: "存命の子供全員に均等", effect: "will-equal-children" },
         ] : []),
+        ...(friends.length ? [{ label: "友人に均等に分配", effect: "will-friends-equal" }] : []),
         ...contacts.map((npc) => ({ label: `${npc.name}に全額を遺す`, effect: `will-person:${npc.id}` })),
         { label: "教会へ寄付", effect: "will-charity:教会" },
         { label: "慈善団体へ寄付", effect: "will-charity:慈善団体" },
@@ -2074,18 +2098,28 @@ function decorateChoice(life, choice) {
   const rule = CHOICE_RULES[choice.effect] ?? CHOICE_RULES[choice.effect.split(":")[0]];
   if (!rule) return { ...choice };
   const cost = ruleCost(life, rule);
+  const payer = rulePayer(life, rule);
   let disabledReason = rule.check?.(life) ?? null;
-  if (!disabledReason && cost > life.gold) disabledReason = `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(life.gold))}）`;
-  return { ...choice, cost, preview: rule.preview?.(life, cost) ?? [], disabledReason };
+  if (!disabledReason && cost > availableFunds(life, payer)) {
+    disabledReason = payer === "parents"
+      ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`
+      : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`;
+  }
+  return { ...choice, cost, payer, preview: rule.preview?.(life, cost) ?? [], disabledReason };
 }
 
 export function choiceAvailability(life, effect) {
   const rule = CHOICE_RULES[effect] ?? CHOICE_RULES[effect.split(":")[0]];
   if (!rule) return { cost: 0, disabledReason: null };
   const cost = ruleCost(life, rule);
+  const payer = rulePayer(life, rule);
   let disabledReason = rule.check?.(life) ?? null;
-  if (!disabledReason && cost > life.gold) disabledReason = `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(life.gold))}）`;
-  return { cost, disabledReason };
+  if (!disabledReason && cost > availableFunds(life, payer)) {
+    disabledReason = payer === "parents"
+      ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`
+      : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`;
+  }
+  return { cost, payer, disabledReason };
 }
 
 function buildDecision(life, event, random) {
@@ -2255,6 +2289,7 @@ export function applyChoice(life, choice, random = Math.random) {
   ensureSkillState(life);
   const before = {
     gold: life.gold,
+    parentGold: life.parents?.gold ?? 0,
     debt: life.debt,
     health: life.health,
     fame: life.fame,
@@ -2264,8 +2299,13 @@ export function applyChoice(life, choice, random = Math.random) {
   const notes = [];
   const result = { cost: availability.cost };
   if (availability.cost > 0) {
-    life.gold -= availability.cost;
-    recordGold(life, selected.label, -availability.cost);
+    if (availability.payer === "parents") {
+      life.parents.gold -= availability.cost;
+      notes.push(`親の財産から${gold(availability.cost)}を支払った`);
+    } else {
+      life.gold -= availability.cost;
+      recordGold(life, selected.label, -availability.cost);
+    }
   }
   let message;
   switch (selected.effect.split(":")[0]) {
@@ -2286,6 +2326,10 @@ export function applyChoice(life, choice, random = Math.random) {
     case "will-equal-children":
       life.will = { type: "children-equal", targetId: null, charity: null };
       message = "存命の子供全員に均等に財産を遺す遺言を残した。";
+      break;
+    case "will-friends-equal":
+      life.will = { type: "friends-equal", targetId: null, charity: null };
+      message = "存命の友人に均等に財産を遺す遺言を残した。";
       break;
     case "will-person": {
       const targetId = selected.effect.split(":")[1];
@@ -2413,8 +2457,7 @@ export function applyChoice(life, choice, random = Math.random) {
       break;
     }
     case "steady":
-      life.gold += 5;
-      message = `${life.occupation}の仕事を続け、少しずつ蓄えを増やした。`;
+      message = `${life.occupation}の仕事と今の暮らしを続けることにした。`;
       break;
     case "invest":
       if (life.gold >= 5) {
@@ -2429,8 +2472,8 @@ export function applyChoice(life, choice, random = Math.random) {
       }
       break;
     case "save":
-      life.gold += 3;
-      message = "無理をせず、少しずつ蓄えを守ることにした。";
+      life.gold += 1;
+      message = "出費を見直し、わずかな蓄えを残すことにした。";
       break;
     case "mentor":
       addSkillPoints(life, "teaching", 3, "若者への指導");
@@ -2903,6 +2946,8 @@ export function applyChoice(life, choice, random = Math.random) {
   const changes = [];
   const goldDelta = Math.round((life.gold - before.gold) * 10) / 10;
   if (goldDelta) changes.push(`所持金${goldDelta > 0 ? "+" : ""}${goldDelta}G`);
+  const parentGoldDelta = Math.round(((life.parents?.gold ?? 0) - before.parentGold) * 10) / 10;
+  if (parentGoldDelta) changes.push(`親の財産${parentGoldDelta > 0 ? "+" : ""}${parentGoldDelta}G`);
   const debtDelta = Math.round((life.debt - before.debt) * 10) / 10;
   if (debtDelta) changes.push(`借金${debtDelta > 0 ? "+" : ""}${debtDelta}G`);
   const fameDelta = life.fame - before.fame;
@@ -2963,6 +3008,9 @@ function settleInheritance(life) {
   } else if (will.type === "person") {
     const target = (life.npcs ?? []).find((npc) => npc.id === will.targetId && npc.alive);
     if (target) slots.push({ heirs: [target], weight: 1 });
+  } else if (will.type === "friends-equal") {
+    const friends = (life.npcs ?? []).filter((npc) => npc.alive && npc.relationship === "友人");
+    if (friends.length) slots.push({ heirs: friends, weight: 1 });
   } else if (will.type === "children-equal" && children.length) {
     slots.push({ heirs: children, weight: 1 });
   }
