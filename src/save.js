@@ -3,6 +3,21 @@ import { RACE_ADULT_MEAN, STAT_KEYS } from "./stats.js";
 
 export const SAVE_KEY = "tomoshibi-save";
 
+function migrateLegacyCurrencyText(value) {
+  if (typeof value === "string") {
+    return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => `${Math.round(Number(amount.replaceAll(",", "")) / 30)}G`);
+  }
+  if (Array.isArray(value)) {
+    return value.map(migrateLegacyCurrencyText);
+  }
+  if (value && typeof value === "object") {
+    for (const [key, nested] of Object.entries(value)) {
+      value[key] = migrateLegacyCurrencyText(nested);
+    }
+  }
+  return value;
+}
+
 // Race and nation are stored by id and re-attached on load, so a save never holds a stale copy of the tables.
 export function serializeLife(life) {
   const snapshot = { ...life, race: life.race.id, nation: life.nation.id };
@@ -112,6 +127,8 @@ export function migrateLife(data) {
   life.playing = false;
   life.saveVersion = SAVE_VERSION;
   life.currencySchema ??= "legacy-G-v1";
+  life.journal = migrateLegacyCurrencyText(life.journal);
+  life.lastResult = migrateLegacyCurrencyText(life.lastResult);
   if (life.ownsHome && !life.homeType) {
     life.homeType = "small";
     life.homeValue = 40;

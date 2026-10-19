@@ -1,5 +1,5 @@
 import {
-  actualAge, advanceLife, chooseDecision, createLife, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST, TUNING,
+  actualAge, advanceLife, chooseDecision, createLife, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST,
 } from "./simulation.js";
 import { characterSprite, drawJourney, lifeStage, livingFamily } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
@@ -81,7 +81,7 @@ function humanAgeNote(target = life) {
 }
 
 function money(value) {
-  return `${Math.round(value * TUNING.currency.silverPerLegacyG)}銀貨`;
+  return `${Math.round(value)}G`;
 }
 
 function createJournalItem(event) {

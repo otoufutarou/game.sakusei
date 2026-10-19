@@ -47,7 +47,6 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
-  currency: { silverPerLegacyG: 30 },
   homePricesLegacyG: { small: 120, large: 400, estate: 50000 / 30 },
   homeResaleRange: [0.7, 0.9],
   homeRentLegacyG: 0.7,
@@ -465,7 +464,7 @@ export function createLife(random = Math.random) {
 }
 
 function appendEvent(life, text, kind = "life", label = "人生", id = null) {
-  const event = { age: life.age, text: toSilverText(text), kind, label, id };
+  const event = { age: life.age, text: toGoldText(text), kind, label, id };
   life.journal.push(event);
   life.eventCount += 1;
   if (id) life.eventHistory.push({ id, age: life.age });
@@ -1591,10 +1590,8 @@ function availableFunds(life, payer) {
   return payer === PAYER.PARENTS ? life.parents?.gold ?? 0 : life.gold ?? 0;
 }
 
-const toSilver = (value) => Math.round(value * TUNING.currency.silverPerLegacyG);
-const silver = (value) => `${toSilver(value)}銀貨`;
-const toSilverText = (text) => String(text).replace(/(-?[\d,]+(?:\.\d+)?)G/g, (_, amount) => silver(Number(amount.replaceAll(",", ""))));
-const gold = (value) => silver(value);
+const gold = (value) => `${Math.round(value)}G`;
+const toGoldText = (text) => String(text).replace(/(-?[\d,]+(?:\.\d+)?)G/g, (_, amount) => gold(Number(amount.replaceAll(",", ""))));
 
 function insufficientFundsReason(life, cost, payer) {
   const funds = availableFunds(life, payer);
@@ -2144,11 +2141,11 @@ function buildDecision(life, event, random) {
     .map((choice) => decorateChoice(life, choice))
     .map((choice) => ({
       ...choice,
-      label: toSilverText(choice.label),
-      preview: (choice.preview ?? []).map(toSilverText),
-      disabledReason: choice.disabledReason ? toSilverText(choice.disabledReason) : null,
+      label: toGoldText(choice.label),
+      preview: (choice.preview ?? []).map(toGoldText),
+      disabledReason: choice.disabledReason ? toGoldText(choice.disabledReason) : null,
     }));
-  decision.copy = toSilverText(decision.copy);
+  decision.copy = toGoldText(decision.copy);
   return decision;
 }
 
@@ -2252,8 +2249,8 @@ function decisionFor(life, random) {
       const decorated = decorateChoice(life, choice);
       return {
         ...decorated,
-        label: toSilverText(decorated.label),
-        preview: (decorated.preview ?? []).map(toSilverText),
+        label: toGoldText(decorated.label),
+        preview: (decorated.preview ?? []).map(toGoldText),
       };
     }),
   };
@@ -2970,9 +2967,9 @@ export function applyChoice(life, choice, random = Math.random) {
   const detail = [...changes, ...notes];
   life.lastResult = {
     title: decision.title,
-    choice: toSilverText(selected.label),
-    message: toSilverText(message),
-    details: detail.map(toSilverText),
+    choice: toGoldText(selected.label),
+    message: toGoldText(message),
+    details: detail.map(toGoldText),
     age: life.age,
   };
   if (changes.length) message = `${message}（${changes.join("、")}）`;

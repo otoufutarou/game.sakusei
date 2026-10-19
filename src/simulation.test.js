@@ -752,7 +752,7 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.ok(life.pendingDecision.choices.filter((choice) => ["edu-town-school", "edu-tutor"].includes(choice.effect))
     .every((choice) => choice.preview.length === 2));
   assert.deepEqual(life.pendingDecision.choices.find((choice) => choice.effect === "edu-town-school").preview, [
-    "費用: 親の財産から120銀貨",
+    "費用: 親の財産から4G",
     "メリット: 読み書きの基礎を4年間学ぶ／デメリット: 家族の蓄えを使う",
   ]);
   applyChoice(life, { effect: "edu-town-school" }, () => 0.9);
@@ -999,15 +999,18 @@ test("death settles the estate to living spouse and children without passing deb
   assert.equal(life.inheritanceEstate, 60);
   assert.equal(life.inheritance.reduce((sum, heir) => sum + heir.amount, 0), 60);
   assert.deepEqual(life.inheritance.map((heir) => Math.round(heir.amount)), [20, 20, 10, 10]);
-  assert.match(life.journal.at(-1).text, /相続財産1800銀貨/);
+  assert.match(life.journal.at(-1).text, /相続財産60G/);
 });
 
-test("legacy balances are preserved and displayed on a silver-denominated 30:1 scale", () => {
-  const legacy = migrateLife({ name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2 });
+test("balances stay unchanged in G and old silver-denominated log text is migrated", () => {
+  const legacy = migrateLife({
+    name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2,
+    journal: [{ text: "相続財産1800銀貨" }],
+  });
   assert.equal(legacy.gold, 5);
   assert.equal(legacy.debt, 2);
   assert.equal(legacy.currencySchema, "legacy-G-v1");
-  assert.equal(TUNING.currency.silverPerLegacyG, 30);
+  assert.equal(legacy.journal[0].text, "相続財産60G");
 });
 
 test("housing purchases and resale preserve a separately valued estate asset", () => {
