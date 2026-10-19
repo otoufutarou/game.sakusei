@@ -1,6 +1,7 @@
 import {
   STAT_KEYS, TALENT_TABLE, currentStats, magicTier, rollAdultBaseline, rollMana, rollTalent, skillName,
 } from "./stats.js";
+import { generatePersonName, NAME_CULTURES } from "./names.js";
 
 export const RACES = [
   { id: "human", name: "人間", multiplier: 1, weight: 51, lifespan: 120 },
@@ -29,21 +30,10 @@ const STATUS_OPTIONS = [
   { name: "無戸籍・流民", weight: 4.9 },
 ];
 
-const GIVEN_NAMES = {
-  human: ["アレン", "ミラ", "ノア", "リナ", "エリオ", "サラ", "ユリウス", "フィア"],
-  beastkin: ["レオ", "ナナ", "ガル", "ルゥ", "カイ", "ミーナ", "トア", "リク"],
-  dwarf: ["ブラム", "ドーラ", "グラン", "ミーナ", "ボルク", "エッダ", "オルン", "ティナ"],
-  demon: ["ゼイン", "リゼ", "ヴァル", "ネラ", "アシュ", "セラ", "ラズ", "メイ"],
-  elf: ["エリア", "シル", "リュカ", "フィオ", "セレン", "ルシア", "エルネ", "ティオ"],
-  dragon: ["ヴァルガ", "セレネ", "ラグナ", "アウラ", "ゼル", "イグニス"],
-  vampire: ["ヴィル", "リリア", "ノクス", "エステル", "レイン", "カミラ"],
-};
-
 const GENDERS = ["女性", "男性"];
 const HOME_TYPES = ["王都", "地方都市", "農村", "辺境"];
 const WORKS = ["家業の手伝い", "農作業", "服飾店の見習い", "職人見習い", "兵士", "商人", "冒険者", "教師"];
 const PERSONALITIES = ["穏やか", "好奇心旺盛", "慎重", "負けず嫌い", "思いやり深い", "自由を好む"];
-const SURNAMES = ["アステル", "リュネ", "ヴァイス", "カナン", "ベルク", "エルド", "セレス", "ノルン"];
 const SITUATIONS = ["平和", "平和", "平和", "平和", "不況", "疫病流行", "飢饉", "戦争中", "魔物の襲撃"];
 const DISEASE_TYPES = [
   { id: "infection", name: "軽い感染症", weight: 50 },
@@ -361,8 +351,7 @@ export function createLife(random = Math.random) {
   const status = pickStatus(nation, random);
   const gender = randomItem(GENDERS, random);
   const home = randomItem(HOME_TYPES, random);
-  const firstName = randomItem(GIVEN_NAMES[race.id], random);
-  const surname = randomItem(SURNAMES, random);
+  const birthName = generatePersonName(random, gender);
   const family = randomItem(["慎ましい", "温かな", "裕福な", "質素な", "にぎやかな"], random);
   const homeForStatus = status.name === "王族" || status.name === "貴族" ? "王都" : home;
   const health = "健やか";
@@ -377,7 +366,9 @@ export function createLife(random = Math.random) {
   const situation = randomItem(SITUATIONS, random);
   const life = {
     saveVersion: SAVE_VERSION,
-    name: `${firstName}・${surname}`,
+    name: birthName.name,
+    familySurname: birthName.surname,
+    nameCulture: birthName.culture,
     gender,
     race,
     nation,
@@ -1092,17 +1083,42 @@ export function npcActualAge(npc) {
 
 const SPOUSE_WORK = ["農作業", "商人", "教師", "職人見習い", "服飾店の見習い", "冒険者", "兵士"];
 
+function lifeNameCulture(life) {
+  return NAME_CULTURES.find((culture) => culture.id === life.nameCulture) ?? null;
+}
+
+function familySurname(life) {
+  return life.familySurname ?? life.name?.split("・").at(-1) ?? null;
+}
+
+function namesAlreadyUsed(life) {
+  return new Set([
+    life.name,
+    ...(life.npcs ?? []).flatMap((npc) => [npc.name, npc.spouseName]),
+  ].filter(Boolean));
+}
+
 function createNpc(life, random, spec) {
   life.npcs ??= [];
   life.npcSerial = (life.npcSerial ?? life.npcs.length) + 1;
   const raceId = spec.race ?? life.race.id;
+  const nameRolls = [random(), random()];
+  const gender = spec.gender ?? randomItem(GENDERS, random);
+  let rollIndex = 0;
+  const personName = generatePersonName(() => nameRolls[rollIndex++], gender, {
+    usedNames: namesAlreadyUsed(life),
+    surname: spec.surname ?? (spec.relationship === "子" ? familySurname(life) : null),
+    culture: NAME_CULTURES.find((culture) => culture.id === spec.nameCulture) ?? null,
+  });
   const npc = {
     id: `npc-${life.npcSerial}`,
-    name: spec.name ?? `${randomItem(GIVEN_NAMES[raceId] ?? GIVEN_NAMES.human, random)}・${randomItem(SURNAMES, random)}`,
+    name: spec.name ?? personName.name,
+    surname: spec.surname ?? personName.surname,
+    nameCulture: spec.nameCulture ?? personName.culture,
     race: raceId,
     humanAge: spec.humanAge ?? life.age + 3,
     age: 0,
-    gender: spec.gender ?? randomItem(GENDERS, random),
+    gender,
     occupation: spec.occupation ?? randomItem(SPOUSE_WORK, random),
     location: spec.location ?? life.home,
     personality: spec.personality ?? randomItem(PERSONALITIES, random),
@@ -1134,10 +1150,12 @@ function createParents(life, random) {
   const humanAge = (offset) => 24 + offset * 10;
   createNpc(life, random, {
     relationship: "父", gender: "男性", humanAge: humanAge(random()) - life.age,
+    surname: life.familySurname, nameCulture: life.nameCulture,
     occupation: life.parents.father, affinity: 60, maritalStatus: "既婚", firstContact: "生まれたときから家族",
   });
   createNpc(life, random, {
     relationship: "母", gender: "女性", humanAge: humanAge(random()) - life.age,
+    surname: life.familySurname, nameCulture: life.nameCulture,
     occupation: life.parents.mother, affinity: 60, maritalStatus: "既婚", firstContact: "生まれたときから家族",
   });
 }
@@ -1205,7 +1223,9 @@ function growChild(life, npc, random, elapsed) {
     }
   } else if (npc.maritalStatus === "未婚" && npc.humanAge >= 22 && random() < 0.08 * elapsed) {
     npc.maritalStatus = "既婚";
-    npc.spouseName = `${randomItem(GIVEN_NAMES[npc.race] ?? GIVEN_NAMES.human, random)}・${randomItem(SURNAMES, random)}`;
+    npc.spouseName = generatePersonName(random, npc.gender === "女性" ? "男性" : "女性", {
+      usedNames: namesAlreadyUsed(life),
+    }).name;
     appendEvent(life, `子の${npc.name}が${npc.spouseName}と結婚した。`, "life", "家族", `child-marriage-${npc.id}`);
   }
   const stable = life.gold >= 10 ? 0.15 : -0.1;
@@ -1386,6 +1406,7 @@ function advancePregnancy(life, random, months) {
       const child = createNpc(life, random, {
         relationship: "子", humanAge: 0, occupation: "幼児", affinity: 75, maritalStatus: "未婚",
         wealth: 0, race: pregnancy.motherRace ?? life.race.id, firstContact: "誕生",
+        surname: familySurname(life), nameCulture: life.nameCulture,
       });
       child.parentId = "protagonist";
       if (life.peerageTitle || life.status?.name === "貴族" || life.status?.name === "王族") {

@@ -26,6 +26,7 @@ import { SKILL_IDS_LIST } from "./simulation.js";
 import { TALENT_TABLE, magicTier, currentStats, rollAdultBaseline, rollTalent, RACE_ADULT_MEAN } from "./stats.js";
 import { deserializeLife, migrateLife, serializeLife } from "./save.js";
 import { agePositionPercent, characterSprite, drawJourney } from "./character-sprite.js";
+import { FAMOUS_FULL_NAMES, generatePersonName, NAME_CULTURES } from "./names.js";
 
 function makeLife(overrides = {}) {
   return {
@@ -157,6 +158,72 @@ test("a generated birth remains paused until the player starts life", () => {
   assert.equal(life.gold, 0, "family assets are not handed to the child as personal cash");
   assert.equal(life.debt, 0, "parents' debts are not assigned to the newborn");
   assert.ok(life.parents.gold >= 0, "family resources remain available as separate birth context");
+});
+
+test("regional names generate 1,000 distinct full names and avoid the famous-name exclusions", () => {
+  const random = seededRandom(41027);
+  const usedNames = new Set();
+  const generated = [];
+  for (let index = 0; index < 1000; index += 1) {
+    const name = generatePersonName(random, index % 2 ? "男性" : "女性", { usedNames });
+    assert.equal(usedNames.has(name.name), false, `duplicate full name ${name.name}`);
+    assert.equal(FAMOUS_FULL_NAMES.has(name.name), false, `excluded famous name ${name.name}`);
+    usedNames.add(name.name);
+    generated.push(name);
+  }
+
+  assert.equal(usedNames.size, 1000);
+  const distinctGivenNames = new Set(generated.map((person) => person.givenName)).size;
+  assert.ok(distinctGivenNames < generated.length, "given-name reuse remains natural");
+  assert.ok(NAME_CULTURES.length >= 9);
+  assert.ok(NAME_CULTURES.every((culture) =>
+    culture.male.length >= 100 && culture.female.length >= 100 && culture.surnames.length >= 20));
+});
+
+test("birth family names and IDs remain stable across save/load", () => {
+  const life = createLife(seededRandom(92));
+  const familySurname = life.name.split("・").at(-1);
+  const parents = life.npcs.filter((npc) => ["父", "母"].includes(npc.relationship));
+
+  assert.equal(life.familySurname, familySurname);
+  assert.equal(parents.length, 2);
+  assert.ok(parents.every((npc) => npc.name.endsWith(`・${familySurname}`)));
+  assert.equal(new Set([life.name, ...parents.map((npc) => npc.name)]).size, 3);
+  assert.equal(new Set(parents.map((npc) => npc.id)).size, 2);
+
+  const restored = deserializeLife(serializeLife(life));
+  assert.equal(restored.name, life.name);
+  assert.equal(restored.familySurname, life.familySurname);
+  assert.deepEqual(restored.npcs.map(({ id, name, surname, nameCulture }) => ({ id, name, surname, nameCulture })),
+    life.npcs.map(({ id, name, surname, nameCulture }) => ({ id, name, surname, nameCulture })));
+
+  const oldSave = { ...life, familySurname: undefined, nameCulture: undefined };
+  const migrated = deserializeLife(serializeLife(oldSave));
+  assert.equal(migrated.name, life.name);
+});
+
+test("children inherit the life family's surname and keep independent NPC IDs", () => {
+  const life = createLife(seededRandom(99));
+  life.age = 25;
+  life.playing = true;
+  life.maxHumanAge = 100;
+  life.nextLogAt = 100;
+  life.nextDecisionAt = 100;
+  life.nextSocialAt = 100;
+  life.world.nextChangeAt = 100;
+  life.pregnancy = { dueAt: 25, motherRace: life.race.id };
+  life.spouseId = "test-spouse";
+  life.npcs.push({
+    id: "test-spouse", name: "アナ・ロッシ", race: life.race.id, humanAge: 25, age: 25,
+    gender: life.gender === "女性" ? "男性" : "女性", alive: true, relationship: "配偶者", affinity: 80, history: [],
+  });
+
+  advanceLife(life, 0.25, seededRandom(100));
+  const child = life.npcs.find((npc) => npc.relationship === "子");
+  assert.ok(child);
+  assert.equal(child.surname, life.familySurname);
+  assert.equal(child.name.split("・").at(-1), life.familySurname);
+  assert.equal(new Set(life.npcs.map((npc) => npc.id)).size, life.npcs.length);
 });
 
 test("routine event catalog meets every required category count", () => {
