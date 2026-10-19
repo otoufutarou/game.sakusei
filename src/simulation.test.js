@@ -536,6 +536,50 @@ test("choice catalog contains distinct stateful decision events", () => {
   }
 });
 
+test("school fallback is informative, meaningful, and presented only once", () => {
+  const life = createLife(() => 0.5);
+  life.age = 9;
+  life.maxHumanAge = 80;
+  life.nextDecisionAt = life.age;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  life.eventHistory.push({ id: "edu-childhood", age: 6 });
+
+  advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision.title, "これからの学び");
+  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.some((line) => line.startsWith("メリット:"))
+    && choice.preview.some((line) => line.startsWith("デメリット:"))));
+  const fame = life.fame;
+  const skill = life.skills.literacy ?? 0;
+  applyChoice(life, { effect: "study" }, () => 0.5);
+  assert.equal(life.fame, fame);
+  assert.ok(life.skills.literacy > skill, "studying grants literacy rather than fame");
+
+  life.nextDecisionAt = life.age;
+  advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision, null, "the resolved school fallback is not presented again");
+  assert.equal(life.eventHistory.filter((event) => event.id === "choice-fallback-school").length, 1);
+});
+
+test("fallback alternatives have distinct mechanical outcomes", () => {
+  const worker = makeLife({ age: 10, gold: 3, skills: {}, baseStats: {} });
+  decide(worker, "work", () => 0.5);
+  assert.equal(worker.gold, 5);
+  assert.equal(worker.skills.manual, 2);
+  assert.equal(worker.fame, 0);
+
+  const mentor = makeLife({ skills: {}, baseStats: {} });
+  decide(mentor, "mentor", () => 0.5);
+  assert.equal(mentor.skills.teaching, 3);
+  assert.equal(mentor.fame, 2);
+
+  const resting = makeLife({ health: "療養中", illness: null, skills: {}, baseStats: {} });
+  decide(resting, "rest", () => 0.5);
+  assert.equal(resting.health, "健やか");
+  assert.ok(resting.relationships.some((relationship) => relationship.type === "family-support"));
+  assert.equal(resting.fame, 0);
+});
+
 test("one hundred human lives produce varied logs without immediate repeats", () => {
   let distinctIds = new Set();
   let consecutiveDuplicateCount = 0;

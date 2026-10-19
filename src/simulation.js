@@ -1586,6 +1586,18 @@ function businessChance(life, size) {
 
 // Cost, availability, and the information shown to the player before choosing.
 const CHOICE_RULES = {
+  study: {
+    preview: () => ["費用: なし", "メリット: 読み書き技能+2、学習を継続", "デメリット: 家業の手伝いによる収入・技能は得られない"],
+  },
+  work: {
+    preview: () => ["費用: なし", "メリット: 所持金+2G、仕事の技能+2", "デメリット: 読み書きの学習は進まない"],
+  },
+  mentor: {
+    preview: () => ["費用: なし", "メリット: 指導技能+3、名声+2", "デメリット: 所持金や職業技能は増えない"],
+  },
+  rest: {
+    preview: () => ["費用: なし", "メリット: 家族との関係を支え、病気でなければ体調を整える", "デメリット: 技能・収入・名声は増えない"],
+  },
   "edu-town-school": {
     cost: 0,
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で町の教室に通えない" : null),
@@ -2186,7 +2198,22 @@ function decisionFor(life, random) {
       ],
     },
   };
-  return { ...options[stage], id: `choice-${Math.floor(random() * 1e9)}` };
+  const fallback = options[stage];
+  const oneTimeFallback = ["school", "elder"].includes(stage);
+  const id = oneTimeFallback ? `choice-fallback-${stage}` : `choice-${Math.floor(random() * 1e9)}`;
+  if (oneTimeFallback && (life.eventHistory ?? []).some((event) => event.id === id)) return null;
+  return {
+    ...fallback,
+    id,
+    choices: fallback.choices.map((choice) => {
+      const decorated = decorateChoice(life, choice);
+      return {
+        ...decorated,
+        label: toSilverText(decorated.label),
+        preview: (decorated.preview ?? []).map(toSilverText),
+      };
+    }),
+  };
 }
 
 function completeIllnessTreatment(life, choice, random) {
@@ -2342,7 +2369,7 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "友人と遊び、近所で顔を覚えてもらった。";
       break;
     case "study":
-      life.fame += 1;
+      addSkillPoints(life, "literacy", 2, "学びの時間");
       addFlag(life, "continued-education");
       life.educationStatus = "学習継続中";
       if (life.age < 13) life.school ??= { id: "home-study", name: "家庭学習" };
@@ -2406,6 +2433,7 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "無理をせず、少しずつ蓄えを守ることにした。";
       break;
     case "mentor":
+      addSkillPoints(life, "teaching", 3, "若者への指導");
       life.fame += 2;
       message = "若い人たちに経験を伝え、感謝された。";
       break;
@@ -2654,10 +2682,12 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "遺跡への遠征を見送り、今の仕事と暮らしを大切にすることにした。";
       break;
     case "rest":
-      life.health = "健やか";
-      life.illnessUntil = life.age;
-      life.fame += 1;
-      message = "仕事を休んで静養し、体調を取り戻した。";
+      if (!life.illness) {
+        life.health = "健やか";
+        life.illnessUntil = life.age;
+      }
+      addRelationship(life, "family-support");
+      message = "馴染みの場所で静養し、家族や身近な人とのつながりを確かめた。";
       break;
     case "edu-town-school":
       startTraining(life, random, {
@@ -3147,6 +3177,11 @@ export function advanceLife(life, humanYears, random = Math.random) {
     }
     if (life.age >= life.nextDecisionAt) {
       life.pendingDecision = decisionFor(life, random);
+      if (!life.pendingDecision) {
+        life.nextDecisionAt = life.age + rollExponential(TUNING.decisionMeanYears, random);
+        if (remaining <= 0) break;
+        continue;
+      }
       life.playing = false;
       appendEvent(life, `${life.pendingDecision.title} — ${life.pendingDecision.copy}`, "decision", "決断", life.pendingDecision.id);
       break;
