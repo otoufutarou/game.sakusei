@@ -499,12 +499,30 @@ test("journey sprite moves with age and reflects species, home, and family", () 
   const elfScene = makeContext();
   drawJourney(elfScene, characterSprite, { life: elfLife, frame: 0 });
   assert.notDeepEqual(elfScene.pixels, adult.pixels);
-  assert.notDeepEqual(elfScene.gradients, adult.gradients);
+  assert.equal(elfScene.gradients.length, 0);
+  assert.equal(adult.gradients.length, 0);
 
   const familyLife = { ...humanLife, spouse: "Partner", children: ["Child"] };
   const familyScene = makeContext();
   drawJourney(familyScene, characterSprite, { life: familyLife, frame: 0 });
   assert.ok(familyScene.pixels.length > adult.pixels.length);
+
+  const pausedScene = makeContext();
+  drawJourney(pausedScene, characterSprite, { life: { ...humanLife, age: 0, playing: false }, frame: 99 });
+  assert.deepEqual(pausedScene.pixels, newborn.pixels);
+
+  const ownedHomeScene = makeContext();
+  drawJourney(ownedHomeScene, characterSprite, {
+    life: { ...humanLife, ownsHome: true, homeType: "estate" },
+  });
+  assert.notDeepEqual(ownedHomeScene.pixels, newborn.pixels);
+
+  const regionalScenes = ["kingdom", "empire", "forest", "mountain", "demon-realm"].map((id) => {
+    const scene = makeContext();
+    drawJourney(scene, characterSprite, { life: { ...humanLife, nation: { id } } });
+    return JSON.stringify(scene.pixels);
+  });
+  assert.equal(new Set(regionalScenes).size, regionalScenes.length);
 });
 
 test("choice catalog contains distinct stateful decision events", () => {

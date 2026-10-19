@@ -1,7 +1,7 @@
 import {
   actualAge, advanceLife, chooseDecision, createLife, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST, TUNING,
 } from "./simulation.js";
-import { characterSprite, drawJourney } from "./character-sprite.js";
+import { characterSprite, drawJourney, lifeStage, livingFamily } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
 import { clearSave, inspectSave, saveToStorage } from "./save.js";
 
@@ -16,6 +16,9 @@ const elements = {
   occupation: $("#occupation-value"),
   sceneCaption: $("#scene-caption"),
   canvas: $("#character-canvas"),
+  lifeProgress: $("#life-progress"),
+  lifeProgressFill: $("#life-progress-fill"),
+  lifeProgressLabel: $("#life-progress-label"),
   play: $("#toggle-play"),
   next: $("#next-decision"),
   indicator: $("#flow-indicator"),
@@ -53,7 +56,7 @@ elements.buildId.textContent = `build: ${BUILD_ID}`;
 let life = createLife();
 let renderedEventCount = 0;
 let lastTimestamp = 0;
-let lastDrawAt = 0;
+let lastSceneKey = null;
 let lastSaveAt = 0;
 let fastForwardToDecision = false;
 let currentDecisionId = null;
@@ -145,13 +148,14 @@ function beginLife() {
 function resetView() {
   renderedEventCount = -1;
   lastTimestamp = 0;
+  lastSceneKey = null;
   fastForwardToDecision = false;
   currentDecisionId = null;
   elements.eventList.replaceChildren();
   addJournalEvents();
   updateLifeDisplay();
   updateControls();
-  drawScene(performance.now(), true);
+  drawScene(true);
 }
 
 function resumeLife() {
@@ -211,11 +215,16 @@ function updateLifeDisplay() {
   const situation = life.world?.situation ?? life.situation;
   elements.worldStatus.textContent = situation === "平和" ? `${life.nation.name} — 平穏` : `${life.nation.name} — ${situation}`;
   elements.age.textContent = formatAge();
+  const lifespan = life.maxHumanAge ?? life.race.lifespan / life.race.multiplier;
+  const progress = Math.max(0, Math.min(100, Math.round((life.age / lifespan) * 100)));
+  elements.lifeProgress.setAttribute("aria-valuenow", String(progress));
+  elements.lifeProgressFill.style.width = `${progress}%`;
+  elements.lifeProgressLabel.textContent = `人生の歩み ${progress}%`;
   elements.characterName.textContent = life.name;
   elements.characterSummary.textContent = `${life.race.name}・${life.gender}・${life.status?.name ?? ""}${humanAgeNote() ? ` ${humanAgeNote()}` : ""}`;
   elements.occupation.textContent = occupationTitle(life);
-  elements.sceneCaption.textContent = life.race.id === "dragon" ? "山の巣のそば" : `${life.nation.name}・${life.home}`;
-  elements.canvas.parentElement.dataset.region = life.race.id === "dragon" ? "dragon" : life.nation.id;
+  elements.sceneCaption.textContent = `${life.nation.name}・${life.home}`;
+  elements.canvas.parentElement.dataset.region = life.nation.id;
   elements.gold.textContent = `${money(life.gold)}${life.debt > 0.5 ? `（借${money(life.debt)}）` : ""}`;
   elements.health.textContent = life.illness
     ? `${life.illness.name}・${life.illness.severity}`
@@ -409,12 +418,41 @@ function showEnding() {
   updateControls();
 }
 
-function drawScene(timestamp, force = false) {
-  if (!force && timestamp - lastDrawAt < 180) return;
-  lastDrawAt = timestamp;
-  const frame = Math.floor(timestamp / 380) % 2;
-  drawJourney(elements.canvas.getContext("2d"), characterSprite, { life, frame });
-  elements.canvas.setAttribute("aria-label", `${life.playing ? "歩く" : "待機する"}${life.race.name}の主人公。職業: ${life.occupation}`);
+function sceneStateKey(target) {
+  const personKey = (person) => [
+    lifeStage(person.age ?? person.humanAge ?? 0),
+    person.gender ?? "",
+    person.race?.id ?? person.race ?? "",
+    person.occupation ?? "",
+    person.health ?? "",
+  ];
+  const family = livingFamily(target);
+  return JSON.stringify([
+    target.active,
+    target.nation?.id,
+    target.home,
+    target.homeType,
+    target.ownsHome,
+    target.status?.name,
+    target.occupation,
+    target.occupationRole,
+    target.educationStatus,
+    target.school?.name,
+    target.health,
+    target.illness?.name,
+    lifeStage(target.age),
+    target.age < 12 ? target.parents : null,
+    family.spouse ? personKey(family.spouse) : null,
+    family.children.map(personKey),
+  ]);
+}
+
+function drawScene(force = false) {
+  const key = sceneStateKey(life);
+  if (!force && key === lastSceneKey) return;
+  lastSceneKey = key;
+  drawJourney(elements.canvas.getContext("2d"), characterSprite, { life });
+  elements.canvas.setAttribute("aria-label", `${life.race.name}の主人公。職業: ${life.occupation}。${life.nation.name}の生活風景`);
 }
 
 function anyModalOpen() {
@@ -437,7 +475,7 @@ function tick(timestamp) {
     if (!life.active) showEnding();
     save();
   }
-  if (timestamp - lastDrawAt > 180) drawScene(timestamp);
+  drawScene();
   requestAnimationFrame(tick);
 }
 
@@ -516,6 +554,6 @@ window.__game = { get life() { return life; }, openStatus, openMoney };
 addJournalEvents();
 updateLifeDisplay();
 updateControls();
-drawScene(performance.now(), true);
+drawScene(true);
 showPrologue();
 requestAnimationFrame(tick);
