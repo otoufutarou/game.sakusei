@@ -1339,6 +1339,10 @@ test("save/load round-trips a life and migrates old saves without inventing hist
   assert.deepEqual(migrated.legacyChildren, ["子A"]);
   assert.equal(migrated.statsEstimated, true);
   assert.equal(migrated.journal.length, 1);
+  const legacyHome = migrateLife({
+    name: "旧所有者", race: "human", nation: "kingdom", age: 30, ownsHome: true, journal: [],
+  });
+  assert.equal(legacyHome.homeValue, TUNING.homePricesLegacyG.small);
   const oldTrying = migrateLife({
     name: "旧データ", race: "human", nation: "kingdom", age: 30, gender: "男性",
     childPlan: "wants", spouseId: "wife", npcs: [{ id: "wife", alive: true, gender: "女性", humanAge: 28 }],

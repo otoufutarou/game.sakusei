@@ -1,4 +1,4 @@
-import { NATIONS, RACES, SAVE_VERSION, SKILL_IDS_LIST } from "./simulation.js";
+import { NATIONS, RACES, SAVE_VERSION, SKILL_IDS_LIST, TUNING } from "./simulation.js";
 import { RACE_ADULT_MEAN, STAT_KEYS } from "./stats.js";
 
 export const SAVE_KEY = "tomoshibi-save";
@@ -136,9 +136,9 @@ export function migrateLife(data) {
   life.lastResult = migrateLegacyCurrencyText(life.lastResult);
   if (life.ownsHome && !life.homeType) {
     life.homeType = "small";
-    life.homeValue = 40;
+    life.homeValue = TUNING.homePricesLegacyG.small;
   }
-  if (life.ownsHome && !life.homeValue) life.homeValue = 40;
+  if (life.ownsHome && !life.homeValue) life.homeValue = TUNING.homePricesLegacyG.small;
   life.will ??= { type: "legal", targetId: null, charity: null };
   return life;
 }
