@@ -57,6 +57,7 @@ elements.buildId = $("#build-id");
 elements.buildId.textContent = `build: ${BUILD_ID}`;
 
 let life = createLife();
+let nextDecisionLimitReached = false;
 let renderedEventCount = 0;
 let lastTimestamp = 0;
 let lastSceneKey = null;
@@ -143,6 +144,7 @@ function showPrologue() {
 function beginLife() {
   life.started = true;
   life.playing = true;
+  nextDecisionLimitReached = false;
   elements.prologueDialog.close();
   lastTimestamp = 0;
   save(true);
@@ -173,6 +175,8 @@ function resumeLife() {
   const { life: saved } = inspectSave();
   if (!saved) return;
   life = saved;
+  delete life.nextDecisionLimitReached;
+  nextDecisionLimitReached = false;
   life.started = true;
   life.playing = false;
   elements.prologueDialog.close();
@@ -192,7 +196,7 @@ function updateControls() {
   const waiting = Boolean(life.pendingDecision);
   const ended = !life.active;
   const paused = !life.playing;
-  const nextStepLimited = life.nextDecisionLimitReached && !waiting && !ended;
+  const nextStepLimited = nextDecisionLimitReached && !waiting && !ended;
   elements.play.disabled = ended || waiting || !life.started;
   elements.play.innerHTML = life.playing ? 'Ⅱ <span>一時停止</span>' : '▶ <span>再開</span>';
   elements.play.setAttribute("aria-label", life.playing ? "一時停止" : "再開");
@@ -512,14 +516,14 @@ function anyModalOpen() {
 
 function advanceToNextDecision() {
   if (!life.active || life.pendingDecision) return;
-  life.nextDecisionLimitReached = false;
+  nextDecisionLimitReached = false;
   life.playing = true;
   let steps = 0;
   while (life.active && !life.pendingDecision && steps < NEXT_DECISION_STEP_LIMIT) {
     advanceLife(life, 0.25, random);
     steps += 1;
   }
-  life.nextDecisionLimitReached = life.active && !life.pendingDecision && steps >= NEXT_DECISION_STEP_LIMIT;
+  nextDecisionLimitReached = life.active && !life.pendingDecision && steps >= NEXT_DECISION_STEP_LIMIT;
   life.playing = false;
   addJournalEvents();
   updateLifeDisplay();
@@ -534,6 +538,7 @@ function tick(timestamp) {
   const elapsedSeconds = Math.min((timestamp - lastTimestamp) / 1000, 0.2);
   lastTimestamp = timestamp;
   if (life.active && life.playing && !anyModalOpen()) {
+    nextDecisionLimitReached = false;
     advanceLife(life, elapsedSeconds * 0.1 * life.speed, random);
     addJournalEvents();
     updateLifeDisplay();
@@ -550,6 +555,7 @@ function tick(timestamp) {
 function startNewLife() {
   for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
   life = createLife();
+  nextDecisionLimitReached = false;
   resetView();
   showPrologue();
 }
@@ -557,7 +563,7 @@ function startNewLife() {
 elements.play.addEventListener("click", () => {
   if (!life.active || life.pendingDecision) return;
   life.playing = !life.playing;
-  life.nextDecisionLimitReached = false;
+  nextDecisionLimitReached = false;
   lastTimestamp = 0;
   updateControls();
   save(true);

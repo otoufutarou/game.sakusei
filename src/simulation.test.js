@@ -1212,12 +1212,28 @@ test("balances stay unchanged in G and old silver-denominated log text is migrat
   assert.equal(formatGold(1666.666), "1,666.67G");
   const legacy = migrateLife({
     name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2,
+    nextDecisionLimitReached: true,
     journal: [{ text: "相続財産1800銀貨" }],
   });
   assert.equal(legacy.gold, 5);
   assert.equal(legacy.debt, 2);
   assert.equal(legacy.currencySchema, "legacy-G-v1");
+  assert.equal(legacy.nextDecisionLimitReached, undefined);
   assert.equal(legacy.journal[0].text, "相続財産60G");
+  const originalEntry = { id: "1銀貨", text: "1銀貨を受け取った" };
+  const detailedResult = {
+    title: "相続", choice: "1銀貨を受け取る", message: "受取額は1銀貨", details: ["残額1銀貨"], age: 22,
+  };
+  const migratedText = migrateLife({
+    name: "旧データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION - 1,
+    journal: [originalEntry], lastResult: detailedResult,
+  });
+  assert.deepEqual(migratedText.journal[0], { id: "1銀貨", text: "0.03Gを受け取った" });
+  assert.notEqual(migratedText.journal[0], originalEntry);
+  assert.equal(originalEntry.text, "1銀貨を受け取った");
+  assert.equal(migratedText.lastResult.choice, "0.03Gを受け取る");
+  assert.equal(migratedText.lastResult.details[0], "残額0.03G");
+  assert.equal(detailedResult.choice, "1銀貨を受け取る");
   const fractional = migrateLife({
     name: "旧データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION - 1,
     journal: [{ text: "1銀貨と15銀貨" }],

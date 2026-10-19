@@ -10,15 +10,26 @@ function migrateLegacyCurrencyText(value) {
   if (typeof value === "string") {
     return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => formatGold(Number(amount.replaceAll(",", "")) / LEGACY_SILVER_PER_G));
   }
-  if (Array.isArray(value)) {
-    return value.map(migrateLegacyCurrencyText);
-  }
-  if (value && typeof value === "object") {
-    for (const [key, nested] of Object.entries(value)) {
-      value[key] = migrateLegacyCurrencyText(nested);
-    }
-  }
   return value;
+}
+
+function migrateLegacyJournal(journal) {
+  if (!Array.isArray(journal)) return journal;
+  return journal.map((entry) => {
+    if (typeof entry === "string") return migrateLegacyCurrencyText(entry);
+    return entry && typeof entry === "object" ? { ...entry, text: migrateLegacyCurrencyText(entry.text) } : entry;
+  });
+}
+
+function migrateLegacyResult(result) {
+  if (!result || typeof result !== "object") return result;
+  return {
+    ...result,
+    title: migrateLegacyCurrencyText(result.title),
+    choice: migrateLegacyCurrencyText(result.choice),
+    message: migrateLegacyCurrencyText(result.message),
+    details: Array.isArray(result.details) ? result.details.map(migrateLegacyCurrencyText) : result.details,
+  };
 }
 
 // Race and nation are stored by id and re-attached on load, so a save never holds a stale copy of the tables.
@@ -131,11 +142,12 @@ export function migrateLife(data) {
   life.active ??= true;
   if (life.pendingDecision) life.pendingDecision = null;
   life.playing = false;
+  delete life.nextDecisionLimitReached;
   life.saveVersion = SAVE_VERSION;
   life.currencySchema ??= "legacy-G-v1";
   if (migrateSilverText) {
-    life.journal = migrateLegacyCurrencyText(life.journal);
-    life.lastResult = migrateLegacyCurrencyText(life.lastResult);
+    life.journal = migrateLegacyJournal(life.journal);
+    life.lastResult = migrateLegacyResult(life.lastResult);
   }
   if (life.ownsHome) {
     life.homeType ??= "small";
