@@ -42,6 +42,8 @@ function missingDefaults(life) {
     trainingSkill: null,
     occupationRole: life.occupation ?? "まだ幼い子ども",
     promotionNote: "",
+    graduationPending: false,
+    graduationSkill: null,
     finance: { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 },
     childPlan: "unset",
     nextChildAskAt: (life.age ?? 0) + 1,
