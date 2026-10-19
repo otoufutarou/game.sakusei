@@ -1,11 +1,13 @@
 import {
-  actualAge, advanceLife, chooseDecision, createLife, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST, TUNING,
+  actualAge, advanceLife, chooseDecision, createLife, formatGold, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST,
 } from "./simulation.js";
 import { characterSprite, drawJourney, lifeStage, livingFamily } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
 import { clearSave, inspectSave, saveToStorage } from "./save.js";
 
 const BUILD_ID = "__BUILD_ID__";
+// Prevent the synchronous next-decision jump from running forever if the event scheduler fails to yield.
+const NEXT_DECISION_STEP_LIMIT = 100;
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -55,13 +57,13 @@ elements.buildId = $("#build-id");
 elements.buildId.textContent = `build: ${BUILD_ID}`;
 
 let life = createLife();
+let nextDecisionLimitReached = false;
 let renderedEventCount = 0;
 let lastTimestamp = 0;
 let lastSceneKey = null;
 let lastSaveAt = 0;
 let previousAbilityValues = {};
 const abilityChangeTimers = new WeakMap();
-let fastForwardToDecision = false;
 let currentDecisionId = null;
 let random = Math.random;
 
@@ -81,7 +83,7 @@ function humanAgeNote(target = life) {
 }
 
 function money(value) {
-  return `${Math.round(value * TUNING.currency.silverPerLegacyG)}銀貨`;
+  return formatGold(value);
 }
 
 function createJournalItem(event) {
@@ -142,6 +144,7 @@ function showPrologue() {
 function beginLife() {
   life.started = true;
   life.playing = true;
+  nextDecisionLimitReached = false;
   elements.prologueDialog.close();
   lastTimestamp = 0;
   save(true);
@@ -160,7 +163,6 @@ function resetView() {
     abilityChangeTimers.delete(changeNode);
     changeNode.textContent = "";
   }
-  fastForwardToDecision = false;
   currentDecisionId = null;
   elements.eventList.replaceChildren();
   addJournalEvents();
@@ -173,6 +175,8 @@ function resumeLife() {
   const { life: saved } = inspectSave();
   if (!saved) return;
   life = saved;
+  delete life.nextDecisionLimitReached;
+  nextDecisionLimitReached = false;
   life.started = true;
   life.playing = false;
   elements.prologueDialog.close();
@@ -192,12 +196,17 @@ function updateControls() {
   const waiting = Boolean(life.pendingDecision);
   const ended = !life.active;
   const paused = !life.playing;
+  const nextStepLimited = nextDecisionLimitReached && !waiting && !ended;
   elements.play.disabled = ended || waiting || !life.started;
   elements.play.innerHTML = life.playing ? 'Ⅱ <span>一時停止</span>' : '▶ <span>再開</span>';
   elements.play.setAttribute("aria-label", life.playing ? "一時停止" : "再開");
   elements.next.disabled = ended || waiting || !life.started;
   elements.indicator.classList.toggle("paused", paused);
-  elements.indicator.innerHTML = `<i></i>${ended ? "人生の終わり" : waiting ? "選択待ち" : paused ? "一時停止" : "進行中"}`;
+  const indicatorLabel = ended ? "人生の終わり" : waiting ? "選択待ち" : nextStepLimited ? "次へで続行" : paused ? "一時停止" : "進行中";
+  elements.indicator.innerHTML = `<i></i>${indicatorLabel}`;
+  elements.indicator.setAttribute("aria-label", nextStepLimited
+    ? "安全上の上限まで進行しました。次の選択までをもう一度押すと続きます。"
+    : indicatorLabel);
   document.querySelectorAll("[data-speed]").forEach((button) => {
     const selected = Number(button.dataset.speed) === life.speed;
     button.classList.toggle("selected", selected);
@@ -443,7 +452,6 @@ function showResult() {
 
 function showEnding() {
   if (life.active || elements.endingDialog.open) return;
-  fastForwardToDecision = false;
   clearSave();
   elements.endingCopy.textContent = `${life.name}は${life.nation.name}の${life.status?.name ?? ""}の家に生まれ、${formatAge({ ...life, age: life.deathAge })}の人生を歩みました。`;
   fillRecords(elements.endingRecord, [
@@ -506,17 +514,35 @@ function anyModalOpen() {
   return [elements.decisionDialog, elements.resultDialog, elements.endingDialog, elements.prologueDialog].some((dialog) => dialog.open);
 }
 
+function advanceToNextDecision() {
+  if (!life.active || life.pendingDecision) return;
+  nextDecisionLimitReached = false;
+  life.playing = true;
+  let steps = 0;
+  while (life.active && !life.pendingDecision && steps < NEXT_DECISION_STEP_LIMIT) {
+    advanceLife(life, 0.25, random);
+    steps += 1;
+  }
+  nextDecisionLimitReached = life.active && !life.pendingDecision && steps >= NEXT_DECISION_STEP_LIMIT;
+  life.playing = false;
+  addJournalEvents();
+  updateLifeDisplay();
+  updateControls();
+  if (life.pendingDecision) showDecision();
+  if (!life.active) showEnding();
+  else save(true);
+}
+
 function tick(timestamp) {
   if (!lastTimestamp) lastTimestamp = timestamp;
   const elapsedSeconds = Math.min((timestamp - lastTimestamp) / 1000, 0.2);
   lastTimestamp = timestamp;
   if (life.active && life.playing && !anyModalOpen()) {
-    const speed = fastForwardToDecision ? 8 : life.speed;
-    advanceLife(life, elapsedSeconds * 0.1 * speed, random);
+    nextDecisionLimitReached = false;
+    advanceLife(life, elapsedSeconds * 0.1 * life.speed, random);
     addJournalEvents();
     updateLifeDisplay();
     if (life.pendingDecision) {
-      fastForwardToDecision = false;
       showDecision();
     }
     if (!life.active) showEnding();
@@ -529,6 +555,7 @@ function tick(timestamp) {
 function startNewLife() {
   for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
   life = createLife();
+  nextDecisionLimitReached = false;
   resetView();
   showPrologue();
 }
@@ -536,6 +563,7 @@ function startNewLife() {
 elements.play.addEventListener("click", () => {
   if (!life.active || life.pendingDecision) return;
   life.playing = !life.playing;
+  nextDecisionLimitReached = false;
   lastTimestamp = 0;
   updateControls();
   save(true);
@@ -547,10 +575,7 @@ document.querySelectorAll("[data-close]").forEach((button) => button.addEventLis
 $("#close-result").addEventListener("click", () => elements.resultDialog.close());
 elements.next.addEventListener("click", () => {
   if (!life.active || life.pendingDecision) return;
-  life.playing = true;
-  fastForwardToDecision = true;
-  lastTimestamp = 0;
-  updateControls();
+  advanceToNextDecision();
 });
 document.querySelectorAll("[data-speed]").forEach((button) => {
   button.addEventListener("click", () => {

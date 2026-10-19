@@ -87,13 +87,15 @@ test("new life: hero is born, time runs, pause/resume, decisions, sprite, reload
   assert.ok((await page.textContent("#birth-record")).includes("出生国"));
   assert.ok((await spriteInk(page)) > 3, "sprite drawn before the life starts");
   assert.equal(await page.locator("#ability-bars [data-stat-key]").count(), 6);
-  assert.equal(await page.locator("#event-list").evaluate((events) => Boolean(events.compareDocumentPosition(document.querySelector("#ability-bars")) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
-  assert.equal(await page.locator("#ability-bars").evaluate((bars) => Boolean(bars.compareDocumentPosition(document.querySelector("#character-canvas")) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+  assert.equal(await page.locator("#character-canvas").evaluate((canvas) => Boolean(canvas.compareDocumentPosition(document.querySelector("#ability-bars")) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+  assert.equal(await page.locator("#ability-bars").evaluate((bars) => Boolean(bars.compareDocumentPosition(document.querySelector("#event-list")) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
   assert.ok(Number(await page.locator('[data-stat-key="body"] .ability-track').getAttribute("aria-valuenow")) >= 0);
 
   await page.click("#begin-life");
+  const ageBeforeNext = await age(page);
   await page.click("#next-decision");
   await page.waitForSelector("#decision-dialog[open]", { timeout: 60000 });
+  assert.ok(await age(page) > ageBeforeNext, "next decision advances time and opens the decision synchronously");
   const decisions = [];
   let maxAge = 0;
   // Make several real choices, always through the visible buttons.

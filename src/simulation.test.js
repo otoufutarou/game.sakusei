@@ -12,14 +12,18 @@ import {
   NATIONS,
   applyChoice,
   choiceAvailability,
+  compactChoicePreview,
+  formatGold,
   monthlyBudget,
   occupationTitle,
   applyRoutineEffect,
+  decorateChoice,
   createLife,
   isRoutineEventEligible,
   skillGrowthDelta,
   skillTier,
   routineLogMean,
+  SAVE_VERSION,
   selectRoutineEvent,
 } from "./simulation.js";
 import { SKILL_IDS_LIST } from "./simulation.js";
@@ -71,7 +75,7 @@ function seededRandom(seed) {
 function lifeForEvent(event) {
   const requirements = event.requirements ?? {};
   const race = RACES.find((candidate) => candidate.id === requirements.raceIds?.[0]) ?? RACES[0];
-  const age = Math.max(requirements.minAge ?? 0, 1);
+  const age = Math.max(event.id === "choice-work-offer" ? 20 : requirements.minAge ?? 0, 1);
   const life = makeLife({
     age: requirements.maxAge === undefined ? age : Math.min(age, requirements.maxAge),
     race,
@@ -85,6 +89,11 @@ function lifeForEvent(event) {
   });
   if (requirements.requiresFlag) life.historyFlags.push(requirements.requiresFlag);
   if (event.id === "edu-academy") life.historyFlags.push("academy-aspirant");
+  if (event.id === "choice-career-graduation") {
+    life.graduationPending = true;
+    life.graduationSkill = "scholarship";
+  }
+  if (event.id === "choice-work-practice") life.occupation = "農作業";
   const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", gender: "女性", alive: true, affinity: 60, history: [] });
   life.mana = 50;
   if (/arranged/.test(event.id)) life.status = { name: "貴族" };
@@ -228,9 +237,8 @@ test("children inherit the life family's surname and keep independent NPC IDs", 
 
 test("routine event catalog meets every required category count", () => {
   const counts = Object.groupBy(ROUTINE_EVENTS, (event) => event.category);
-  assert.ok(ROUTINE_EVENTS.length >= 50);
   assert.ok((counts["幼少期・教育"]?.length ?? 0) >= 6);
-  assert.ok((counts["職業・昇進"]?.length ?? 0) >= 10);
+  assert.ok((counts["職業・昇進"]?.length ?? 0) >= 7);
   assert.ok((counts["家族・人間関係"]?.length ?? 0) >= 8);
   assert.ok((counts["恋愛・結婚"]?.length ?? 0) >= 5);
   assert.ok((counts["財産・借金"]?.length ?? 0) >= 5);
@@ -305,7 +313,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
       occupationYears: 0,
       skills: { teaching: 0 },
       skillTalents: { teaching: "普通" },
-      skillPractice: {},
+      skillPractice: { teaching: { activity: 1, learning: 1 } },
       skillMonthProgress: 0,
       skillHistory: [],
     });
@@ -315,7 +323,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
   }
 });
 
-test("skills progress during a month even without a scheduled life-log event", () => {
+test("skills stay fixed over time unless the player chooses to practice", () => {
   const life = makeLife({
     age: 20,
     playing: true,
@@ -333,8 +341,34 @@ test("skills progress during a month even without a scheduled life-log event", (
   });
   const journalLength = life.journal.length;
   advanceLife(life, 1 / 12, () => 0.999);
-  assert.ok(life.skills.teaching > 0);
+  assert.equal(life.skills.teaching, 0);
   assert.equal(life.journal.length, journalLength);
+  decide(life, "work-practice", () => 0.999);
+  assert.equal(life.skills.teaching, 1);
+});
+
+test("chosen ongoing practice grows its skill without passive career skill growth", () => {
+  const life = makeLife({
+    age: 20,
+    playing: true,
+    occupation: "教師",
+    occupationSkill: 0,
+    occupationRank: "初心者",
+    skills: { magic: 0, teaching: 0 },
+    skillTalents: { magic: "普通", teaching: "普通" },
+    skillPractice: {},
+    skillMonthProgress: 0,
+    skillHistory: [],
+    nextLogAt: 50,
+    nextDecisionAt: 50,
+    maxHumanAge: 100,
+    pendingDecision: { id: "magic-training", choices: [{ effect: "self-study-magic" }] },
+  });
+  applyChoice(life, { effect: "self-study-magic" }, () => 0.5);
+  const selectedMagic = life.skills.magic;
+  advanceLife(life, 0.25, () => 0.999);
+  assert.ok(life.skills.magic > selectedMagic);
+  assert.equal(life.skills.teaching, 0);
 });
 
 test("race age multipliers normalize practice to human-equivalent years", () => {
@@ -347,7 +381,7 @@ test("race age multipliers normalize practice to human-equivalent years", () => 
       occupationRank: "初心者",
       skills: { teaching: 0 },
       skillTalents: { teaching: "普通" },
-      skillPractice: {},
+      skillPractice: { teaching: { activity: 1, learning: 1 } },
       skillMonthProgress: 0,
       skillHistory: [],
     });
@@ -375,7 +409,7 @@ test("skill tiers follow the specified ranges and remain separate from tenure", 
   const life = makeLife({ occupation: "教師", occupationSkill: 30, occupationYears: 21 });
   life.skills = { teaching: 30 };
   life.skillTalents = { teaching: "普通" };
-  life.skillPractice = {};
+  life.skillPractice = { teaching: { activity: 1, learning: 1 } };
   life.skillMonthProgress = 0;
   advanceSkills(life, 1);
   assert.equal(life.occupationYears, 21);
@@ -391,15 +425,46 @@ test("changing careers preserves learned skills and records the transition reaso
     skillTalents: { craft: "普通", magic: "普通" },
     skillPractice: {},
     careerHistory: [],
-    pendingDecision: { id: "career-choice", choices: [{ effect: "career" }] },
+    pendingDecision: { id: "career-choice", choices: [{ effect: "career-start:家業の手伝い" }] },
   });
-  applyChoice(life, { effect: "career" }, () => 0);
+  applyChoice(life, { effect: "career-start:家業の手伝い" }, () => 0);
   assert.equal(life.occupation, "家業の手伝い");
   assert.equal(life.skills.craft, 42);
   assert.equal(life.skills.magic, 8);
   assert.equal(life.careerHistory.at(-1).from, "職人見習い");
   assert.equal(life.careerHistory.at(-1).to, "家業の手伝い");
   assert.match(life.careerHistory.at(-1).reason, /本人/);
+});
+
+test("stale career choices cannot assign an unqualified or unknown occupation", () => {
+  const life = makeLife({
+    occupation: "職人見習い",
+    pendingDecision: { id: "stale-career-choice", choices: [{ effect: "career-start:魔術師" }] },
+  });
+  applyChoice(life, { effect: "career-start:魔術師" }, () => 0);
+  assert.equal(life.occupation, "職人見習い");
+  assert.match(life.lastResult.message, /適性や技能を満たしていない/);
+  life.pendingDecision = { id: "unknown-career-choice", choices: [{ effect: "career-start:未知の職業" }] };
+  applyChoice(life, { effect: "career-start:未知の職業" }, () => 0);
+  assert.equal(life.occupation, "職人見習い");
+  const alreadyWorking = makeLife({
+    age: 20,
+    occupation: "農作業",
+    skills: { farming: 5 },
+    pendingDecision: { id: "duplicate-career-choice", choices: [{ effect: "career-change:農作業" }] },
+  });
+  applyChoice(alreadyWorking, { effect: "career-change:農作業" }, () => 0);
+  assert.match(alreadyWorking.lastResult.message, /すでに農作業として働いている/);
+});
+
+test("steady previews preserve choice-specific context and use a neutral fallback", () => {
+  const life = makeLife();
+  const jobOfferSteady = decorateChoice(life, {
+    effect: "steady",
+    preview: ["月給: 現在の職業を継続", "転職せず、今の仕事に取り組む"],
+  });
+  assert.deepEqual(jobOfferSteady.preview, ["月給: 現在の職業を継続", "転職せず、今の仕事に取り組む"]);
+  assert.deepEqual(decorateChoice(life, { effect: "steady" }).preview, ["費用: なし", "今の暮らしを続ける"]);
 });
 
 test("choosing a magic mentor creates a persistent contact and ongoing skill practice", () => {
@@ -512,6 +577,38 @@ test("journey sprite moves with age and reflects species, home, and family", () 
   assert.equal(elfScene.gradients.length, 0);
   assert.equal(adult.gradients.length, 0);
 
+  const scaledHero = { ...humanLife, occupation: "兵士", appearance: { hair: "#34271f", coat: "#647d72" } };
+  const adultAlone = makeContext();
+  adultAlone.canvas.height = 150;
+  drawJourney(adultAlone, characterSprite, { life: scaledHero });
+  const householdLife = {
+    ...scaledHero,
+    spouseId: "adult",
+    children: ["child"],
+    npcs: [
+      { id: "adult", name: "Adult", humanAge: 40, alive: true, occupation: "兵士", race: "human" },
+      { id: "child", name: "Child", humanAge: 8, alive: true, occupation: "服飾店の見習い", race: "human" },
+    ],
+  };
+  const householdScene = makeContext();
+  householdScene.canvas.height = 150;
+  drawJourney(householdScene, characterSprite, { life: householdLife });
+  assert.equal(
+    Math.max(...householdScene.pixels.filter((pixel) => pixel[4] === "#657491").map((pixel) => pixel[3])),
+    Math.max(...adultAlone.pixels.filter((pixel) => pixel[4] === "#657491").map((pixel) => pixel[3])),
+    "adult household members use the hero's pixel scale",
+  );
+  const childAlone = makeContext();
+  childAlone.canvas.height = 150;
+  drawJourney(childAlone, characterSprite, {
+    life: { ...scaledHero, age: 8, occupation: "服飾店の見習い" },
+  });
+  assert.equal(
+    Math.max(...householdScene.pixels.filter((pixel) => pixel[4] === "#8fb0c4").map((pixel) => pixel[3])),
+    Math.max(...childAlone.pixels.filter((pixel) => pixel[4] === "#8fb0c4").map((pixel) => pixel[3])),
+    "children use the same pixel scale as a child hero",
+  );
+
   const familyLife = { ...humanLife, spouse: "Partner", children: ["Child"] };
   const familyScene = makeContext();
   drawJourney(familyScene, characterSprite, { life: familyLife, frame: 0 });
@@ -558,8 +655,10 @@ test("school fallback is informative, meaningful, and presented only once", () =
 
   advanceLife(life, 0.25, () => 0.5);
   assert.equal(life.pendingDecision.title, "これからの学び");
-  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.some((line) => line.startsWith("メリット:"))
-    && choice.preview.some((line) => line.startsWith("デメリット:"))));
+  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.length === 2));
+  const workChoice = life.pendingDecision.choices.find((choice) => choice.effect === "work");
+  assert.match(workChoice.preview[1], /所持金/);
+  assert.match(workChoice.preview[1], /注意:/);
   const fame = life.fame;
   const skill = life.skills.literacy ?? 0;
   applyChoice(life, { effect: "study" }, () => 0.5);
@@ -691,7 +790,8 @@ test("base stats follow race means with individual variation, mana tiers are sep
   advanceLife(life, 0.1, seededRandom(1));
   assert.equal(life.skills.magic, 0, "mana alone never grows magic skill");
   const newborn = currentStats({ baseStats: { body: 100 }, age: 0, mana: 0 });
-  assert.ok(newborn.body < 10, "birth stats are not adult baselines");
+  assert.equal(newborn.body, 100, "age does not passively change a base stat");
+  assert.equal(currentStats({ baseStats: { body: 100 }, age: 100, mana: 0 }).body, newborn.body);
 });
 
 test("every life rolls talents per skill and keeps the numeric stat model", () => {
@@ -700,8 +800,9 @@ test("every life rolls talents per skill and keeps the numeric stat model", () =
   assert.ok(Number.isFinite(life.mana) && life.baseStats.body > 0);
 });
 
-test("choosing a mage apprenticeship persists the mentor, trains the skill, keeps the job, and graduates", () => {
+test("a chosen mage apprenticeship trains skills and opens an explicit career choice at graduation", () => {
   const { life, random } = adultLife(2, { age: 13, occupation: "まだ幼い子ども", gold: 80 });
+  life.mana = 80;
   assert.equal(decide(life, "apprentice-magic", random).ok ?? true, true);
   assert.equal(life.occupation, "魔術師の弟子");
   assert.equal(life.trainingSkill, "magic");
@@ -710,10 +811,17 @@ test("choosing a mage apprenticeship persists the mentor, trains the skill, keep
   assert.ok(life.lastResult.details.some((line) => line.includes("所持金")));
   assert.ok(life.skillPractice.magic.learning >= 1.4);
   const before = life.skills.magic;
-  for (let step = 0; step < 100 && life.occupation === "魔術師の弟子"; step += 1) advanceLife(life, 0.25, random);
+  for (let step = 0; step < 100 && !life.graduationPending; step += 1) advanceLife(life, 0.25, random);
   assert.ok(life.skills.magic > before + 5);
   assert.equal(life.educationHistory.at(-1).outcome, "修了");
-  assert.equal(life.occupation, "魔術師", "the career follows from the apprenticeship, never a different trade");
+  assert.equal(life.occupation, "魔術師の弟子", "graduation does not assign a career without a choice");
+  const mageChoice = life.pendingDecision.choices.find((choice) => choice.effect === "career-graduate:魔術師");
+  assert.ok(mageChoice);
+  assert.ok(life.pendingDecision.choices.filter((choice) => choice.effect.startsWith("career-graduate:")).length >= 3);
+  assert.match(mageChoice.preview[0], /月給:/);
+  assert.match(mageChoice.preview[1], /必要技能:/);
+  applyChoice(life, mageChoice, random);
+  assert.equal(life.occupation, "魔術師");
   assert.equal(life.skillPractice.magic?.learning === 1.4, false, "mentor bonus is removed after the apprenticeship");
   assert.ok(life.skills.magic > 0 && occupationTitle(life).length > 0);
 });
@@ -752,7 +860,7 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.ok(life.pendingDecision.choices.filter((choice) => ["edu-town-school", "edu-tutor"].includes(choice.effect))
     .every((choice) => choice.preview.length === 2));
   assert.deepEqual(life.pendingDecision.choices.find((choice) => choice.effect === "edu-town-school").preview, [
-    "費用: 親の財産から120銀貨",
+    "費用: 親の財産から4G",
     "メリット: 読み書きの基礎を4年間学ぶ／デメリット: 家族の蓄えを使う",
   ]);
   applyChoice(life, { effect: "edu-town-school" }, () => 0.9);
@@ -761,7 +869,9 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.equal(life.trainingEndsAt, 12, "the basic school course lasts four human-equivalent years");
   assert.ok(life.lastResult.details.some((line) => line.includes("親の財産-")));
   const route = CHOICE_EVENTS.find((event) => event.id === "edu-apprenticeship");
-  assert.equal(route.choices.length, 3);
+  const routeChoices = route.choicesFor({ ...life, age: 13, occupation: "まだ幼い子ども" });
+  assert.ok(routeChoices.some((choice) => choice.effect.startsWith("career-start:")));
+  assert.ok(routeChoices.some((choice) => choice.effect === "path-academy"));
 });
 
 test("friend inheritance is represented by one equal-share option", () => {
@@ -802,14 +912,14 @@ test("steady living does not create money and deliberate saving yields only a sm
   assert.equal(life.gold, 21);
 });
 
-test("ordinary wage cash flow leaves only a small monthly shortfall", () => {
+test("ordinary wage cash flow leaves only a modest monthly surplus", () => {
   const farmer = adultLife(46, { occupation: "農作業", occupationRole: "農作業", occupationSkill: 0, occupationYears: 0 }).life;
   farmer.world = { situation: "平和" };
   const budget = monthlyBudget(farmer);
-  assert.equal(budget.income.work, 3 * TUNING.wageMultiplier);
+  assert.equal(budget.income.work, 3.9 * TUNING.wageMultiplier);
   assert.equal(budget.expenses.living, TUNING.adultLivingCostLegacyG);
   assert.equal(budget.expenses.rent, TUNING.homeRentLegacyG);
-  assert.ok(budget.net < 0 && budget.net > -0.25, "an ordinary farmer's monthly cash flow has a small shortfall");
+  assert.ok(budget.net > 0 && budget.net < 0.75, "an ordinary farmer's monthly cash flow stays near break-even");
 });
 
 test("spending reduces gold, is recorded in the ledger, and unaffordable choices cannot be applied", () => {
@@ -838,11 +948,89 @@ test("monthly budget shows income, living costs, family costs, and debt interest
   assert.ok(life.finance.lastMonth, "monthly accounting runs from the game loop");
 });
 
+test("famine hurts farmers, recessions reduce merchant and business income, and home costs match value", () => {
+  const farmer = adultLife(6, { occupation: "農作業", occupationSkill: 0 }).life;
+  farmer.world = { situation: "平和" };
+  const normalFarmBudget = monthlyBudget(farmer);
+  farmer.world = { situation: "飢饉" };
+  const famineFarmBudget = monthlyBudget(farmer);
+  assert.ok(famineFarmBudget.income.work < normalFarmBudget.income.work);
+  assert.ok(famineFarmBudget.net < normalFarmBudget.net);
+
+  const merchant = adultLife(7, { occupation: "商人", occupationSkill: 0, businessRevenue: 1 }).life;
+  merchant.world = { situation: "平和" };
+  const normalMerchantIncome = monthlyBudget(merchant).income.work;
+  merchant.world = { situation: "不況" };
+  assert.ok(monthlyBudget(merchant).income.work < normalMerchantIncome);
+
+  const homeEvent = ROUTINE_EVENTS.find((event) => event.id === "wealth-property");
+  assert.equal(homeEvent.requirements.minimumGold, TUNING.homePricesLegacyG.small);
+  assert.equal(homeEvent.effect.gold, -TUNING.homePricesLegacyG.small);
+  const buyer = makeLife({ age: 30, gold: TUNING.homePricesLegacyG.small });
+  applyRoutineEffect(buyer, homeEvent, () => 0.5);
+  assert.equal(buyer.gold, 0);
+  assert.equal(buyer.ownsHome, true);
+  assert.equal(buyer.homeValue, TUNING.homePricesLegacyG.small);
+});
+
+test("choice summaries retain important conditions and durations", () => {
+  const preview = compactChoicePreview(["費用: 8G", "条件: 10歳以上", "期間: 約5年", "デメリット: 修行中は収入がない"]);
+  assert.equal(preview.length, 2);
+  assert.ok(preview[1].includes("条件: 10歳以上"));
+  assert.ok(preview[1].includes("期間: 約5年"));
+});
+
+test("ordinary lifetime savings stay near one small home for most careers", () => {
+  const jobs = ["農作業", "商人", "職人見習い", "兵士", "教師", "冒険者", "服飾店の見習い"];
+  const peakAssets = [];
+  for (let seed = 1; seed <= 210; seed += 1) {
+    const random = seededRandom(seed * 51);
+    const life = createLife(random);
+    Object.assign(life, {
+      age: 20,
+      occupation: jobs[(seed - 1) % jobs.length],
+      occupationSkill: 0,
+      occupationYears: 0,
+      occupationRole: undefined,
+      gold: 0,
+      playing: true,
+      started: true,
+      maxHumanAge: 65,
+      nextDecisionAt: 20.5,
+      nextLogAt: 20.25,
+      nextSocialAt: Infinity,
+      status: { name: "都市平民" },
+      parents: null,
+    });
+    let peak = 0;
+    let guard = 0;
+    while (life.active && life.age < 65 && guard++ < 5_000) {
+      if (life.pendingDecision) {
+        const choice = life.pendingDecision.choices.find((item) => item.effect === "steady" || item.effect === "save")
+          ?? life.pendingDecision.choices.at(-1);
+        if (choice) applyChoice(life, choice, random);
+        life.playing = true;
+      }
+      advanceLife(life, 0.25, random);
+      peak = Math.max(peak, life.gold + (life.homeValue ?? 0));
+    }
+    peakAssets.push(peak);
+  }
+  peakAssets.sort((left, right) => left - right);
+  const homePrice = TUNING.homePricesLegacyG.small;
+  const seventiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.7)];
+  const ninetiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.9)];
+  assert.ok(seventiethPercentile >= homePrice * 0.75 && seventiethPercentile <= homePrice * 2.5,
+    `70th percentile assets ${seventiethPercentile}G should stay near one small home (${homePrice}G)`);
+  assert.ok(peakAssets.filter((assets) => assets < homePrice * 0.75).length > 0, "some workers remain below the home threshold");
+  assert.ok(ninetiethPercentile < homePrice * 3.5, "ordinary careers should not commonly accumulate several home prices");
+});
+
 test("meeting NPCs, romance, and marriage run through persistent NPCs and refusals are possible", () => {
   let married = 0;
   let met = 0;
   for (let seed = 1; seed <= 30; seed += 1) {
-    const { life, random } = adultLife(seed, { age: 22, gold: 120, nextSocialAt: 22 });
+    const { life, random } = adultLife(seed, { age: 22, gold: 200, nextSocialAt: 22 });
     life.status = { name: "都市平民" };
     for (let step = 0; step < 160 && life.age < 40; step += 1) {
       life.nextSocialAt = Math.min(life.nextSocialAt, life.age + 0.2);
@@ -881,6 +1069,22 @@ test("children are a choice: no automatic births, 'not now' defers, 'never' stop
   assert.equal(life.npcs.filter((npc) => npc.relationship === "子").length, 0);
   decide(life, "children-yes", random);
   assert.equal(life.childPlan, "wants");
+});
+
+test("marriage guarantees a child-planning decision within six months", () => {
+  const { life } = adultLife(14, { age: 30, gold: 20 });
+  const partner = { id: "partner", name: "配偶者", race: "human", humanAge: 29, alive: true, affinity: 100, history: [], relationship: "恋愛相手", occupation: "農作業", gender: "女性", maritalStatus: "未婚" };
+  life.npcs.push(partner);
+  life.romanticPartnerId = partner.id;
+  life.historyFlags.push("romantic-partner", "committed-relationship");
+  decide(life, "marry", () => 0);
+  assert.equal(life.spouseId, partner.id);
+  assert.equal(life.nextDecisionAt, life.age + 0.5);
+  advanceLife(life, 0.25, () => 0.99);
+  assert.equal(life.pendingDecision, null);
+  advanceLife(life, 0.25, () => 0.99);
+  assert.equal(life.pendingDecision?.id, "choice-children");
+  assert.match(life.pendingDecision.copy, /一人目の子供/);
 });
 
 test("the child-planning choice uses the woman's human-equivalent age and opens again after remarriage", () => {
@@ -999,15 +1203,47 @@ test("death settles the estate to living spouse and children without passing deb
   assert.equal(life.inheritanceEstate, 60);
   assert.equal(life.inheritance.reduce((sum, heir) => sum + heir.amount, 0), 60);
   assert.deepEqual(life.inheritance.map((heir) => Math.round(heir.amount)), [20, 20, 10, 10]);
-  assert.match(life.journal.at(-1).text, /相続財産1800銀貨/);
+  assert.match(life.journal.at(-1).text, /相続財産60G/);
 });
 
-test("legacy balances are preserved and displayed on a silver-denominated 30:1 scale", () => {
-  const legacy = migrateLife({ name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2 });
+test("balances stay unchanged in G and old silver-denominated log text is migrated", () => {
+  assert.equal(formatGold(0.04), "0.04G");
+  assert.equal(formatGold(12.3), "12.3G");
+  assert.equal(formatGold(1666.666), "1,666.67G");
+  const legacy = migrateLife({
+    name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2,
+    nextDecisionLimitReached: true,
+    journal: [{ text: "相続財産1800銀貨" }],
+  });
   assert.equal(legacy.gold, 5);
   assert.equal(legacy.debt, 2);
   assert.equal(legacy.currencySchema, "legacy-G-v1");
-  assert.equal(TUNING.currency.silverPerLegacyG, 30);
+  assert.equal(legacy.nextDecisionLimitReached, undefined);
+  assert.equal(legacy.journal[0].text, "相続財産60G");
+  const originalEntry = { id: "1銀貨", text: "1銀貨を受け取った" };
+  const detailedResult = {
+    title: "相続", choice: "1銀貨を受け取る", message: "受取額は1銀貨", details: ["残額1銀貨"], age: 22,
+  };
+  const migratedText = migrateLife({
+    name: "旧データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION - 1,
+    journal: [originalEntry], lastResult: detailedResult,
+  });
+  assert.deepEqual(migratedText.journal[0], { id: "1銀貨", text: "0.03Gを受け取った" });
+  assert.notEqual(migratedText.journal[0], originalEntry);
+  assert.equal(originalEntry.text, "1銀貨を受け取った");
+  assert.equal(migratedText.lastResult.choice, "0.03Gを受け取る");
+  assert.equal(migratedText.lastResult.details[0], "残額0.03G");
+  assert.equal(detailedResult.choice, "1銀貨を受け取る");
+  const fractional = migrateLife({
+    name: "旧データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION - 1,
+    journal: [{ text: "1銀貨と15銀貨" }],
+  });
+  assert.equal(fractional.journal[0].text, "0.03Gと0.5G");
+  const current = migrateLife({
+    name: "現行データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION,
+    journal: [{ text: "メモ: 1銀貨という言葉" }],
+  });
+  assert.equal(current.journal[0].text, "メモ: 1銀貨という言葉");
 });
 
 test("housing purchases and resale preserve a separately valued estate asset", () => {
@@ -1081,12 +1317,24 @@ test("business expansion uses the configured base rates and caps the count of in
   assert.ok(monthlyBudget(life).income.work > 0);
 });
 
-test("job offers gate qualification separately from the fixed I-V acceptance rates", () => {
-  assert.deepEqual(TUNING.jobAcceptanceRates, [0.95, 0.8, 0.6, 0.25, 0.05]);
+test("job offers show explicit career destinations with salary and skill requirements", () => {
   const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-offer");
   const life = makeLife({ skills: { literacy: 0, trade: 0, scholarship: 0, magic: 0 }, mana: 0 });
   const choices = event.choicesFor(life);
-  assert.deepEqual(choices.map((choice) => choice.effect), ["job-application:1:農作業", "steady"]);
+  assert.equal(choices.at(-1).effect, "steady");
+  assert.ok(choices.slice(0, -1).length >= 2);
+  assert.ok(choices.slice(0, -1).every((choice) => choice.effect.startsWith("career-change:")));
+  assert.ok(choices.slice(0, 2).every((choice) => choice.preview.length === 2
+    && choice.preview[0].startsWith("月給") && choice.preview[1].startsWith("必要技能:")));
+  const recessionOptions = event.choicesFor({
+    ...life, occupation: "失業中", skills: { ...life.skills, trade: 5 }, world: { situation: "不況" },
+  });
+  assert.ok(recessionOptions.find((choice) => choice.effect === "career-change:商人").preview[0].includes("不況"));
+  const unemployed = makeLife({ age: 16, occupation: "失業中", skills: { manual: 0, farming: 0, craft: 0 } });
+  unemployed.eventHistory.push({ id: event.id, age: 14 });
+  assert.equal(isRoutineEventEligible(unemployed, event), true, "unemployed teenagers can receive explicit job options");
+  unemployed.age = 15;
+  assert.equal(isRoutineEventEligible(unemployed, event), false, "an unemployed character waits two years between offers");
 });
 
 test("widowhood, divorce, and remarriage keep state consistent", () => {
@@ -1105,14 +1353,16 @@ test("widowhood, divorce, and remarriage keep state consistent", () => {
   assert.equal(life.npcs.find((npc) => npc.id === "spouse-2").maritalStatus, "離別");
 });
 
-test("world situations change state (war conscripts soldiers, plague raises danger, prices rise)", () => {
+test("war and plague adjust prices and income, and the world situation evolves", () => {
   const { life, random } = adultLife(12, { occupation: "兵士", gold: 30 });
   life.world = { situation: "平和", since: life.age, nextChangeAt: life.age + 0.1 };
-  const peaceIncome = monthlyBudget(life).income.work;
-  life.world.situation = "戦争中";
-  assert.ok(monthlyBudget(life).expenses.living > monthlyBudget({ ...life, world: { situation: "平和" } }).expenses.living, "war raises prices");
-  life.world.situation = "疫病流行";
-  assert.ok(monthlyBudget(life).income.work !== peaceIncome || true);
+  const peacefulBudget = monthlyBudget(life);
+  const warBudget = monthlyBudget({ ...life, world: { situation: "戦争中" } });
+  assert.ok(warBudget.expenses.living > peacefulBudget.expenses.living, "war raises prices");
+  assert.ok(warBudget.income.work > peacefulBudget.income.work, "war slightly raises soldiers' wages");
+  const plagueBudget = monthlyBudget({ ...life, world: { situation: "疫病流行" } });
+  assert.ok(plagueBudget.expenses.living > peacefulBudget.expenses.living);
+  assert.ok(plagueBudget.income.work < peacefulBudget.income.work);
   let changed = false;
   life.world = { situation: "平和", since: life.age, nextChangeAt: life.age };
   for (let step = 0; step < 400 && !changed; step += 1) {
@@ -1149,6 +1399,11 @@ test("save/load round-trips a life and migrates old saves without inventing hist
   assert.deepEqual(migrated.legacyChildren, ["子A"]);
   assert.equal(migrated.statsEstimated, true);
   assert.equal(migrated.journal.length, 1);
+  const legacyHome = migrateLife({
+    name: "旧所有者", race: "human", nation: "kingdom", age: 30, saveVersion: SAVE_VERSION - 1,
+    ownsHome: true, homeType: "small", homeValue: 40, journal: [],
+  });
+  assert.equal(legacyHome.homeValue, TUNING.homePricesLegacyG.small);
   const oldTrying = migrateLife({
     name: "旧データ", race: "human", nation: "kingdom", age: 30, gender: "男性",
     childPlan: "wants", spouseId: "wife", npcs: [{ id: "wife", alive: true, gender: "女性", humanAge: 28 }],

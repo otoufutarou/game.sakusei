@@ -32,7 +32,6 @@ const STATUS_OPTIONS = [
 
 const GENDERS = ["女性", "男性"];
 const HOME_TYPES = ["王都", "地方都市", "農村", "辺境"];
-const WORKS = ["家業の手伝い", "農作業", "服飾店の見習い", "職人見習い", "兵士", "商人", "冒険者", "教師"];
 const PERSONALITIES = ["穏やか", "好奇心旺盛", "慎重", "負けず嫌い", "思いやり深い", "自由を好む"];
 const SITUATIONS = ["平和", "平和", "平和", "平和", "不況", "疫病流行", "飢饉", "戦争中", "魔物の襲撃"];
 const DISEASE_TYPES = [
@@ -47,7 +46,6 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
-  currency: { silverPerLegacyG: 30 },
   homePricesLegacyG: { small: 120, large: 400, estate: 50000 / 30 },
   homeResaleRange: [0.7, 0.9],
   homeRentLegacyG: 0.7,
@@ -58,9 +56,9 @@ export const TUNING = Object.freeze({
   scholarshipLivingCostLegacyG: 12,
   scholarshipRepaymentRate: 0.1,
   business: {
-    small: { cost: 8, chance: 0.6, revenue: 0.5 },
-    medium: { cost: 20, chance: 0.45, revenue: 1.2 },
-    large: { cost: 40, chance: 0.3, revenue: 2.5 },
+    small: { cost: 8, chance: 0.6, revenue: 0.25 },
+    medium: { cost: 20, chance: 0.45, revenue: 0.6 },
+    large: { cost: 40, chance: 0.3, revenue: 1.2 },
     maximumExpansions: 3,
     skillAdjustmentMax: 0.1,
     minimumChance: 0.2,
@@ -76,7 +74,6 @@ export const TUNING = Object.freeze({
   socialMeanYears: 2.6,
   retirementHumanAge: 65,
   promotionSuccessChance: 0.25,
-  jobAcceptanceRates: [0.95, 0.8, 0.6, 0.25, 0.05],
   promotionRetryYears: 3,
   ordinaryDebtLimit: 100,
   childDecisionMaxHumanAge: 45,
@@ -224,29 +221,26 @@ const defineEvent = (id, category, requirements, text, effect, weight = 1) => ({
 });
 
 export const ROUTINE_EVENTS = [
-  defineEvent("child-first-book", "幼少期・教育", { minAge: 5, maxAge: 16, oncePerLife: true }, () => "古い絵本を最後まで読み、自分で物語を追えるようになった。", { skill: 1, flag: "learned-to-read" }, 1.2),
+  defineEvent("child-first-book", "幼少期・教育", { minAge: 5, maxAge: 16, oncePerLife: true }, () => "古い絵本を最後まで読み、物語の結末を知った。", { flag: "learned-to-read" }, 1.2),
   defineEvent("child-playmates", "幼少期・教育", { minAge: 4, maxAge: 12 }, () => "近所の子どもたちと遊び回り、仲間うちで頼られる役を任された。", { fame: 1, relation: "friend" }),
   defineEvent("child-school-friend", "幼少期・教育", { minAge: 6, maxAge: 17 }, () => "学び舎で隣に座る子と親しくなり、放課後も一緒に過ごすようになった。", { relation: "friend" }),
-  defineEvent("child-exam", "幼少期・教育", { minAge: 8, maxAge: 18, requiresFlag: "school-attendance", occupations: ["まだ幼い子ども"] }, () => "難しい課題を最後まで解き、先生から次の学びを勧められた。", { skill: 2, fame: 1 }),
-  defineEvent("child-library", "幼少期・教育", { minAge: 7, maxAge: 19, requiresFlag: "learned-to-read" }, () => "町の書庫で地図や薬草の本を読み、知らない土地への興味が湧いた。", { skill: 2, flag: "library-learner" }),
-  defineEvent("child-apprentice-lesson", "幼少期・教育", { minAge: 10, maxAge: 20, occupations: ["まだ幼い子ども", "家業の手伝い"], oncePerLife: true }, () => "近所の職人が作業を見せてくれ、道具の名前と安全な扱い方を覚えた。", { skill: 2, flag: "craft-curious" }),
+  defineEvent("child-exam", "幼少期・教育", { minAge: 8, maxAge: 18, requiresFlag: "school-attendance", occupations: ["まだ幼い子ども"] }, () => "難しい課題に取り組み、先生から次の学びを勧められた。", { fame: 1 }),
+  defineEvent("child-library", "幼少期・教育", { minAge: 7, maxAge: 19, requiresFlag: "learned-to-read" }, () => "町の書庫で地図や薬草の本を眺め、知らない土地への興味が湧いた。", { flag: "library-learner" }),
+  defineEvent("child-apprentice-lesson", "幼少期・教育", { minAge: 10, maxAge: 20, occupations: ["まだ幼い子ども", "家業の手伝い"], oncePerLife: true }, () => "近所の職人が作業を見せ、道具の名前と安全な扱い方を説明してくれた。", { flag: "craft-curious" }),
 
-  defineEvent("career-first-work", "職業・昇進", { minAge: 13, maxAge: 25, occupations: ["まだ幼い子ども"], oncePerLife: true }, () => "家族の紹介で初めての仕事を得て、見習いとして働き始めた。", { action: "start-work" }),
-  defineEvent("career-apprentice-task", "職業・昇進", { minAge: 13, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"] }, () => "任された品を期限までに仕上げ、親方から次の工程を教わった。", { skill: 2, gold: 1 }),
-  defineEvent("career-harvest", "職業・昇進", { minAge: 13, occupations: ["農作業", "家業の手伝い"] }, () => "豊作の年を迎え、仲間と収穫を終えて賃金と分け前を受け取った。", { gold: 3, skill: 1 }),
+  defineEvent("career-apprentice-task", "職業・昇進", { minAge: 13, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"] }, () => "任された品を期限までに仕上げ、親方から次の工程を教わった。", { gold: 1 }),
+  defineEvent("career-harvest", "職業・昇進", { minAge: 13, occupations: ["農作業", "家業の手伝い"] }, () => "豊作の年を迎え、仲間と収穫を終えて賃金と分け前を受け取った。", { gold: 3 }),
   defineEvent("career-mentor", "職業・昇進", { minAge: 18, minimumSkill: 20 }, () => "仕事の経験を買われ、後輩に道具の扱いを教える役目を任された。", { fame: 2, flag: "mentored-worker" }),
   defineEvent("career-promotion", "職業・昇進", { minAge: 18, minimumSkill: 40 }, () => "積み重ねた仕事ぶりが評価され、より大きな責任を伴う役目を得た。", { fame: 3, gold: 2, flag: "promotion-earned" }),
-  defineEvent("career-guild-license", "職業・昇進", { minAge: 18, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"], minimumSkill: 40 }, () => "組合の技能試験に合格し、独りで仕事を受ける資格を得た。", { skill: 2, fame: 3, flag: "guild-license" }),
+  defineEvent("career-guild-license", "職業・昇進", { minAge: 18, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"], minimumSkill: 40 }, () => "組合の技能試験に合格し、独りで仕事を受ける資格を得た。", { fame: 3, flag: "guild-license" }),
   defineEvent("career-new-client", "職業・昇進", { minAge: 18, minimumSkill: 20 }, (life) => `${life.nation.name}の遠方から新しい依頼が届き、仕事の評判が広がった。`, { gold: 3, fame: 1 }),
-  defineEvent("career-independent-shop", "職業・昇進", { minAge: 25, occupations: ["職人見習い", "服飾店の見習い", "鍛冶職人"], minimumSkill: 60, minimumGold: 25, oncePerLife: true }, () => "貯金と腕を頼りに小さな工房を借り、自分の看板を掲げた。", { gold: -15, fame: 5, flag: "independent-craftsperson", action: "open-workshop" }),
-  defineEvent("career-job-change", "職業・昇進", { minAge: 22, occupations: ["兵士", "冒険者"], oncePerLife: true }, () => "危険の多い任務に区切りをつけ、経験を生かせる別の仕事へ移った。", { action: "career-change", fame: 1 }),
   defineEvent("career-retirement", "職業・昇進", { minAge: 65, minimumSkill: 60, oncePerLife: true }, () => "長年の仕事に一区切りをつけるか、続けるかを考える時期になった。", { flag: "retirement-reminder" }),
 
   defineEvent("family-sibling-birth", "家族・人間関係", { minAge: 1, maxAge: 25, oncePerLife: true }, () => "家族に新しい子が生まれ、家の中に小さな泣き声が響いた。", { action: "sibling" }),
   defineEvent("family-parent-illness", "家族・人間関係", { minAge: 8, maxAge: 80, custom: (life) => !life.npcs || life.npcs.length === 0 || livingParents(life).length > 0 }, () => "親が病に伏せ、家族で看病と家の仕事を分担して支えた。", { relation: "family-support", gold: -2 }),
   defineEvent("family-old-friend", "家族・人間関係", { minAge: 12 }, () => "幼い頃からの友人と久しぶりに会い、互いの近況を語り合った。", { relation: "friend" }),
   defineEvent("family-reconcile", "家族・人間関係", { minAge: 16, requiresFlag: "family-dispute" }, () => "長く続いた家族との行き違いについて話し合い、和解することができた。", { action: "reconcile", fame: 1 }),
-  defineEvent("family-inheritance", "家族・人間関係", { minAge: 18, oncePerLife: true }, () => "身内から大切に使っていた道具を譲り受け、家の歴史を聞いた。", { skill: 1, flag: "inherited-tool" }),
+  defineEvent("family-inheritance", "家族・人間関係", { minAge: 18, oncePerLife: true }, () => "身内から大切に使っていた道具を譲り受け、家の歴史を聞いた。", { flag: "inherited-tool" }),
   defineEvent("family-care-parent", "家族・人間関係", { minAge: 35, maxAge: 100, custom: (life) => !life.npcs || life.npcs.length === 0 || livingParents(life).length > 0 }, () => "年老いた親の暮らしを支え、長い年月の恩に少しずつ報いた。", { gold: -3, fame: 2, relation: "family-support" }),
   defineEvent("family-funeral", "家族・人間関係", { minAge: 15, oncePerLife: true }, () => "親しい人との別れを家族や友人と悼み、思い出を分かち合った。", { fame: 1, flag: "remembered-loss" }),
   defineEvent("family-neighbor-help", "家族・人間関係", { minAge: 6 }, (life) => `${life.home}の近所で困っていた人を手伝い、頼れる仲間が増えた。`, { relation: "ally", fame: 1 }),
@@ -261,7 +255,7 @@ export const ROUTINE_EVENTS = [
   defineEvent("wealth-bad-harvest", "財産・借金", { minAge: 15, oncePerLife: true }, () => "不作で食料の値が上がり、冬を越すために蓄えを切り崩した。", { gold: -8, flag: "survived-famine" }),
   defineEvent("wealth-loan", "財産・借金", { minAge: 18, maximumGold: 5, oncePerLife: true }, () => "商人から少額融資の申し出があったが、借入は本人が選ぶことにした。", { flag: "loan-offer" }),
   defineEvent("wealth-repay-debt", "財産・借金", { minAge: 18, minimumGold: 12, requiresFlag: "small-loan", oncePerLife: true }, () => "少しずつ返してきた借金を完済し、帳面から名前を消してもらった。", { gold: -12, debt: -12, action: "clear-loan" }),
-  defineEvent("wealth-property", "財産・借金", { minAge: 25, minimumGold: 40, oncePerLife: true }, () => "長年の貯金で小さな家を手に入れ、初めて自分の住所を持った。", { gold: -35, fame: 2, flag: "owns-home", action: "buy-home" }),
+  defineEvent("wealth-property", "財産・借金", { minAge: 25, minimumGold: TUNING.homePricesLegacyG.small, oncePerLife: true }, () => "長年の貯金で小さな家を相場どおりの価格で手に入れ、初めて自分の住所を持った。", { gold: -TUNING.homePricesLegacyG.small, fame: 2, flag: "owns-home", action: "buy-home" }),
 
   defineEvent("health-fever", "病気・事故", { minAge: 5, oncePerLife: true }, () => "高熱に倒れたが、家族と町医者の看病で回復した。", { health: "回復中", gold: -2, flag: "survived-fever" }),
   defineEvent("health-work-injury", "病気・事故", { minAge: 13, occupations: ["農作業", "兵士", "冒険者", "職人見習い", "鍛冶職人"] }, () => "仕事中に怪我を負い、しばらく休んでから現場へ戻った。", { health: "療養中", gold: -3, flag: "work-injury" }),
@@ -269,14 +263,14 @@ export const ROUTINE_EVENTS = [
   defineEvent("health-epidemic", "病気・事故", { minAge: 12, oncePerLife: true }, () => "疫病が町に広がるなか、隔離と薬の助けで病を乗り越えた。", { health: "回復中", gold: -4, flag: "survived-epidemic" }),
   defineEvent("health-recovery", "病気・事故", { minAge: 14, healthStates: ["療養中", "回復中"], oncePerLife: true }, () => "十分な休養を取り、体調が戻っていつもの暮らしに復帰した。", { health: "健やか", fame: 1, action: "recover" }),
 
-  defineEvent("magic-first-spark", "魔法・種族固有", { minAge: 6, maxAge: 25, oncePerLife: true, custom: (life) => life.mana === undefined || life.mana >= 1 }, () => "眠っていた魔力が初めて灯り、指先に小さな光がともった。", { magic: 2, flag: "awakened-magic" }),
-  defineEvent("magic-race-training", "魔法・種族固有", { minAge: 12, requiresFlag: "awakened-magic", custom: (life) => life.mana === undefined || life.mana >= 1 }, () => "一族に伝わる呼吸法を学び、魔力を安全に操れるようになった。", { magic: 3, skill: 1 }),
+  defineEvent("magic-first-spark", "魔法・種族固有", { minAge: 6, maxAge: 25, oncePerLife: true, custom: (life) => life.mana === undefined || life.mana >= 1 }, () => "眠っていた魔力の存在に気づき、指先に小さな光がともった。", { flag: "awakened-magic" }),
+  defineEvent("magic-race-training", "魔法・種族固有", { minAge: 12, requiresFlag: "awakened-magic", custom: (life) => life.mana === undefined || life.mana >= 1 }, () => "一族に伝わる呼吸法を教わり、魔力の扱い方を知った。", { flag: "magic-breathing-learned" }),
   defineEvent("race-beastkin-senses", "魔法・種族固有", { raceIds: ["beastkin"], minAge: 6, oncePerLife: true }, () => "鋭い嗅覚で森道の異変に気づき、旅人を危険から遠ざけた。", { fame: 2, relation: "ally" }),
-  defineEvent("race-dwarf-vein", "魔法・種族固有", { raceIds: ["dwarf"], minAge: 18, oncePerLife: true }, () => "山道の岩肌から鉱脈を見つけ、採掘仲間と採掘権を分け合った。", { gold: 12, skill: 2 }),
-  defineEvent("race-elf-spirit", "魔法・種族固有", { raceIds: ["elf"], minAge: 13, oncePerLife: true }, () => "森の精霊の光が弱まっていることに気づき、長老と原因を探った。", { magic: 3, fame: 2 }),
-  defineEvent("race-demon-control", "魔法・種族固有", { raceIds: ["demon"], minAge: 13, oncePerLife: true }, () => "あふれる魔力で家財を揺らしたが、訓練を重ねて制御を身につけた。", { magic: 4, skill: 1, flag: "controlled-demon-magic" }),
+  defineEvent("race-dwarf-vein", "魔法・種族固有", { raceIds: ["dwarf"], minAge: 18, oncePerLife: true }, () => "山道の岩肌から鉱脈を見つけ、採掘仲間と採掘権を分け合った。", { gold: 12 }),
+  defineEvent("race-elf-spirit", "魔法・種族固有", { raceIds: ["elf"], minAge: 13, oncePerLife: true }, () => "森の精霊の光が弱まっていることに気づき、長老と原因を探った。", { fame: 2 }),
+  defineEvent("race-demon-control", "魔法・種族固有", { raceIds: ["demon"], minAge: 13, oncePerLife: true }, () => "あふれる魔力で家財を揺らした後、家族から魔力の制御法を教わった。", { flag: "controlled-demon-magic" }),
   defineEvent("race-dragon-flight", "魔法・種族固有", { raceIds: ["dragon"], minAge: 6, maxAge: 40, oncePerLife: true }, () => "初めて自分の力だけで飛び、雲の上から広い山並みを見渡した。", { fame: 2, flag: "first-flight" }),
-  defineEvent("race-vampire-oath", "魔法・種族固有", { raceIds: ["vampire"], minAge: 18, oncePerLife: true }, () => "夜の眷属を守る誓いを立て、血族の長から一族の印を授かった。", { magic: 2, fame: 2, flag: "vampire-oath" }),
+  defineEvent("race-vampire-oath", "魔法・種族固有", { raceIds: ["vampire"], minAge: 18, oncePerLife: true }, () => "夜の眷属を守る誓いを立て、血族の長から一族の印を授かった。", { fame: 2, flag: "vampire-oath" }),
 
   defineEvent("nation-border-war", "国家・戦争・冒険", { minAge: 18, oncePerLife: true }, (life) => `${life.nation.name}の国境で戦が起き、家族と避難先や物資を確かめた。`, { gold: -5, fame: 1, flag: "lived-through-war" }),
   defineEvent("nation-caravan-escort", "国家・戦争・冒険", { minAge: 16, occupations: ["兵士", "冒険者", "商人"], oncePerLife: true }, () => "危険な街道を行く隊商を護衛し、無事な到着と報酬を得た。", { gold: 10, fame: 3 }),
@@ -312,7 +306,9 @@ export function isRoutineEventEligible(life, event, age = life.age) {
   if (requirements.oncePerLife && history.some((entry) => entry.id === event.id)) return false;
   if ((life.journal ?? []).slice(-20).some((entry) => entry.id === event.id)) return false;
   const lastOccurrence = [...history].reverse().find((entry) => entry.id === event.id);
-  if (lastOccurrence && age - lastOccurrence.age < (requirements.cooldownYears ?? 0)) return false;
+  const cooldownYears = typeof requirements.cooldownYears === "function"
+    ? requirements.cooldownYears(life) : requirements.cooldownYears ?? 0;
+  if (lastOccurrence && age - lastOccurrence.age < cooldownYears) return false;
   return true;
 }
 
@@ -438,6 +434,8 @@ export function createLife(random = Math.random) {
     occupationSkill: 0,
     occupationYears: 0,
     occupationRank: "初心者",
+    graduationPending: false,
+    graduationSkill: null,
     familyCount: 0,
     siblings: 0,
     spouse: null,
@@ -465,7 +463,7 @@ export function createLife(random = Math.random) {
 }
 
 function appendEvent(life, text, kind = "life", label = "人生", id = null) {
-  const event = { age: life.age, text: toSilverText(text), kind, label, id };
+  const event = { age: life.age, text: asText(text), kind, label, id };
   life.journal.push(event);
   life.eventCount += 1;
   if (id) life.eventHistory.push({ id, age: life.age });
@@ -569,10 +567,6 @@ export function skillTier(skill) {
 
 function skillGrowthPlans(life) {
   const plans = new Map();
-  const occupationSkill = OCCUPATION_SKILLS[life.occupation];
-  if (life.age >= 13 && occupationSkill && !NON_WORKING.includes(life.occupation)) {
-    plans.set(occupationSkill, { activity: 1, learning: 1 });
-  }
   for (const [skill, practice] of Object.entries(life.skillPractice ?? {})) {
     if (practice.activity > 0) plans.set(skill, practice);
   }
@@ -602,11 +596,12 @@ function updateOccupationRank(life) {
 
 export function advanceSkills(life, humanYears) {
   if (humanYears <= 0) return;
+  const plans = skillGrowthPlans(life);
+  if (plans.size === 0) return;
   const skills = ensureSkillState(life);
   const accumulatedMonths = (life.skillMonthProgress ?? 0) + humanYears * 12;
   const completeMonths = Math.floor(accumulatedMonths + Number.EPSILON);
   life.skillMonthProgress = accumulatedMonths - completeMonths;
-  const plans = skillGrowthPlans(life);
   const raceFactor = RACE_SKILL_FACTORS[life.race?.id] ?? {};
   const ageMultiplier = RACE_AGE_MULTIPLIERS[life.race?.id] ?? life.race?.multiplier ?? 1;
 
@@ -647,13 +642,6 @@ export function applyRoutineEffect(life, event, random = Math.random) {
   life.gold = Math.max(0, life.gold + (effect.gold ?? 0));
   life.debt = Math.max(0, life.debt + (effect.debt ?? 0));
   life.fame = Math.max(0, life.fame + (effect.fame ?? 0));
-  if (effect.skill) {
-    const skill = event.category === "魔法・種族固有" ? "magic"
-      : event.category === "幼少期・教育" ? "literacy"
-        : OCCUPATION_SKILLS[life.occupation] ?? "general";
-    addSkillPoints(life, skill, effect.skill, event.category);
-  }
-  if (effect.magic) addSkillPoints(life, "magic", effect.magic * 0.5, event.category);
   if (event.id === "magic-first-spark" && !life.trainingPlan) life.educationStatus = "魔力が目覚めた";
   if (effect.health) {
     life.health = effect.health;
@@ -663,22 +651,13 @@ export function applyRoutineEffect(life, event, random = Math.random) {
   addFlag(life, effect.flag);
 
   switch (effect.action) {
-    case "start-work":
-      changeOccupation(life, pickCareer(life, random), "家族の紹介で就職");
-      life.gold += 4;
-      break;
-    case "career-change":
-      changeOccupation(life, randomItem(["商人", "教師", "職人見習い"], random), "職業イベントによる転職");
-      break;
     case "retire":
       addFlag(life, "retirement-choice-resolved");
       break;
-    case "open-workshop":
-      changeOccupation(life, "工房主", "工房を開業");
-      life.occupationRank = rankForSkill(life.occupationSkill);
-      break;
     case "buy-home":
       life.ownsHome = true;
+      life.homeType = "small";
+      life.homeValue = TUNING.homePricesLegacyG.small;
       break;
     case "sibling":
       life.siblings += 1;
@@ -709,14 +688,7 @@ export function applyRoutineEffect(life, event, random = Math.random) {
   }
 }
 
-function pickCareer(life, random) {
-  const eligible = life.race.id === "dragon"
-    ? ["狩りを覚える", "巣の外を探検する", "縄張りを見回る"]
-    : WORKS;
-  return randomItem(eligible, random);
-}
-
-function changeOccupation(life, occupation, reason = "就職・転職", restore = false) {
+function changeOccupation(life, occupation, reason = "就職・転職") {
   if (life.occupation === occupation) return;
   ensureSkillState(life);
   const previous = life.occupation;
@@ -728,9 +700,8 @@ function changeOccupation(life, occupation, reason = "就職・転職", restore 
     yearsInPrevious: Math.round((life.occupationYears ?? 0) * 10) / 10,
   });
   life.occupation = occupation;
-  const record = restore ? life.careerRecords[occupation] : null;
-  life.occupationYears = record?.years ?? 0;
-  life.occupationRole = record?.role ?? occupation;
+  life.occupationYears = 0;
+  life.occupationRole = occupation;
   syncOccupationSkill(life);
   life.occupationRank = rankForSkill(life.occupationSkill);
   updatePromotionNote(life);
@@ -755,31 +726,31 @@ function lifeStage(age) {
   return "elder";
 }
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 // Provisional monthly wages in G (base role). 1G is treated as roughly 5,000 yen of buying power in the
 // design notes, but realistic wages at that rate do not fit the existing 4–60G choice prices, so these
 // are scaled-down placeholder values pending the designer's economy decision.
 const OCCUPATION_INCOME = Object.freeze({
   "まだ幼い子ども": 0,
-  "家業の手伝い": 0.8,
-  "農作業": 3,
-  "服飾店の見習い": 2.2,
-  "職人見習い": 2.5,
-  "鍛冶職人": 2.7,
+  "家業の手伝い": 1.6,
+  "農作業": 3.9,
+  "服飾店の見習い": 3.9,
+  "職人見習い": 3.9,
+  "鍛冶職人": 3.9,
   "兵士": 3.6,
-  "商人": 4.5,
+  "商人": 3.5,
   "冒険者": 3.5,
-  "教師": 4.2,
-  "魔術師": 5.5,
+  "教師": 3.6,
+  "魔術師": 4,
   "魔術師の弟子": 0,
   "魔術学院生": 0,
   "剣術の弟子": 0,
   "騎士学院生": 0,
   "学術院生": 0,
-  "騎士": 6,
-  "学者": 5,
-  "工房主": 7,
+  "騎士": 4.2,
+  "学者": 4,
+  "工房主": 4.2,
   "失業中": 0.4,
   "引退": 0.8,
   "狩りを覚える": 1.5,
@@ -883,11 +854,11 @@ function updateRole(life) {
 // ---------------------------------------------------------------- world state
 
 const WORLD_TABLE = Object.freeze({
-  "戦争中": { weight: 3, price: 1.25, income: { "商人": 1.25, "農作業": 0.85, "冒険者": 1.35, "兵士": 1.15 }, defaultIncome: 0.95, npcHazard: 1.5, illness: 1 },
+  "戦争中": { weight: 3, price: 1.25, income: { "商人": 1.05, "農作業": 0.85, "冒険者": 1.1, "兵士": 1.05 }, defaultIncome: 0.95, npcHazard: 1.5, illness: 1 },
   "疫病流行": { weight: 2, price: 1.1, income: {}, defaultIncome: 0.9, npcHazard: 4, illness: 3 },
-  "飢饉": { weight: 1.5, price: 1.6, income: { "農作業": 0.6 }, defaultIncome: 0.9, npcHazard: 2, illness: 1.3 },
-  "不況": { weight: 2, price: 1, income: { "商人": 0.7 }, defaultIncome: 0.8, npcHazard: 1, illness: 1 },
-  "魔物の襲撃": { weight: 1.5, price: 1.1, income: { "冒険者": 1.5, "農作業": 0.8 }, defaultIncome: 1, npcHazard: 1.3, illness: 1 },
+  "飢饉": { weight: 1.5, price: 1.8, income: { "農作業": 0.4 }, defaultIncome: 0.9, npcHazard: 2, illness: 1.3 },
+  "不況": { weight: 2, price: 1.15, income: { "商人": 0.5 }, defaultIncome: 0.8, npcHazard: 1, illness: 1 },
+  "魔物の襲撃": { weight: 1.5, price: 1.1, income: { "冒険者": 1.1, "農作業": 0.8 }, defaultIncome: 1, npcHazard: 1.3, illness: 1 },
 });
 
 export function worldModifiers(life) {
@@ -919,33 +890,12 @@ const WORLD_END_TEXT = Object.freeze({
 
 function applyWorldOnset(life, situation, random) {
   const impacts = [];
-  const adult = life.age >= 18;
-  const exempt = ["王族", "貴族", "奴隷"].includes(life.status?.name);
-  if (situation === "戦争中") {
-    if (life.occupation === "兵士") {
-      impacts.push("兵士として戦地へ送られる危険が高まった");
-    } else if (adult && life.age < 45 && !exempt && !NON_WORKING.includes(life.occupation)
-      && !TRAINEE_OCCUPATIONS.includes(life.occupation) && random() < 0.35) {
-      life.draftedFrom = life.occupation;
-      changeOccupation(life, "兵士", "戦争による徴兵");
-      impacts.push("徴兵され、兵士として働くことになった");
-    }
-    if (life.occupation === "商人") impacts.push("軍需で商人の取引が増えた");
-    if (life.occupation === "冒険者") impacts.push("護衛や討伐の依頼が増えた");
-    if (life.occupation === "農作業") impacts.push("食料の徴発で収穫の取り分が減った");
-  } else if (situation === "疫病流行") {
+  if (situation === "疫病流行") {
     impacts.push("病気にかかりやすくなり、親しい人の安否も気がかりだ");
   } else if (situation === "飢饉") {
     impacts.push("生活費が大きく増えた");
   } else if (situation === "不況") {
-    const vulnerable = ["商人", "職人見習い", "服飾店の見習い", "教師", "家業の手伝い"];
-    if (vulnerable.includes(life.occupation) && life.age >= 13 && random() < 0.4) {
-      life.unemployedFrom = life.occupation;
-      changeOccupation(life, "失業中", "不況による解雇");
-      impacts.push("不況で職を失った");
-    } else if (life.age >= 13) {
-      impacts.push("収入が減った");
-    }
+    if (life.age >= 13) impacts.push("不況で仕事の賃金が下がっている");
   } else if (situation === "魔物の襲撃") {
     if (life.occupation === "冒険者") impacts.push("討伐の依頼が増えた");
     if (["辺境", "農村"].includes(life.home)) {
@@ -972,13 +922,7 @@ function advanceWorld(life, random) {
     world.since = life.age;
     world.nextChangeAt = life.age + 3 + rollExponential(7, random);
     life.situation = "平和";
-    const notes = [];
-    if (ended === "戦争中" && life.draftedFrom && life.occupation === "兵士") {
-      changeOccupation(life, life.draftedFrom, "戦争の終結で復員", true);
-      notes.push(`徴兵を解かれ、${life.draftedFrom}の仕事へ戻った`);
-      life.draftedFrom = null;
-    }
-    appendEvent(life, `${WORLD_END_TEXT[ended]}${notes.length ? `（${notes.join("、")}）` : ""}`, "world", "世界情勢", `world-end-${ended}-${Math.floor(life.age)}`);
+    appendEvent(life, WORLD_END_TEXT[ended], "world", "世界情勢", `world-end-${ended}-${Math.floor(life.age)}`);
     return;
   }
   const choice = weightedPick(Object.entries(WORLD_TABLE), ([, entry]) => entry.weight, random)[0];
@@ -1018,8 +962,8 @@ export function monthlyBudget(life, random = null) {
   const working = life.age >= 13 && !(life.occupation === "まだ幼い子ども");
   let work = working ? (OCCUPATION_INCOME[life.occupation] ?? 1) * roleMultiplier(life)
     * (1 + (life.occupationSkill ?? 0) / 200) * TUNING.wageMultiplier : 0;
-  work *= working ? mods.incomeFor(life.occupation) : 1;
   work += life.businessRevenue ?? 0;
+  work *= working ? mods.incomeFor(life.occupation) : 1;
   if (random && life.occupation === "冒険者") work *= 0.4 + 1.2 * random();
   const spouse = spouseNpc(life);
   const spouseWork = spouse ? (OCCUPATION_INCOME[spouse.occupation] ?? 1) * 0.9 * TUNING.wageMultiplier * mods.incomeFor(spouse.occupation) : 0;
@@ -1046,6 +990,62 @@ export function monthlyBudget(life, random = null) {
     totalExpense: expenses,
     net: income - expenses - repayment - scholarshipRepayment,
   };
+}
+
+const CAREER_CATALOG = Object.freeze([
+  { occupation: "家業の手伝い", skill: "manual", minimum: 0, minAge: 10, description: "家の仕事を支える" },
+  { occupation: "農作業", skill: "farming", minimum: 0, minAge: 10, description: "畑や牧場で働く" },
+  { occupation: "職人見習い", skill: "craft", minimum: 0, minAge: 10, description: "職人の工房で働く" },
+  { occupation: "服飾店の見習い", skill: "tailoring", minimum: 0, minAge: 10, description: "服飾店で技術を学ぶ" },
+  { occupation: "鍛冶職人", skill: "smithing", minimum: 5, minAge: 12, description: "鍛冶場で働く" },
+  { occupation: "兵士", skill: "combat", minimum: 5, minAge: 13, description: "町や街道を守る" },
+  { occupation: "商人", skill: "trade", minimum: 5, minAge: 13, description: "品物を仕入れ販売する" },
+  { occupation: "冒険者", skill: "adventuring", minimum: 5, minAge: 15, description: "依頼や探索を行う" },
+  { occupation: "魔術師", skill: "magic", minimum: 5, minAge: 18, mana: 20, description: "魔術を使い人々を助ける" },
+  { occupation: "教師", skill: "teaching", minimum: 5, minAge: 18, literacy: 5, description: "学び舎で教える" },
+  { occupation: "学者", skill: "scholarship", minimum: 5, minAge: 18, literacy: 5, description: "知識を研究する" },
+  { occupation: "騎士", skill: "swordsmanship", minimum: 5, minAge: 18, knight: true, description: "騎士団に仕える" },
+]);
+
+function careerQualified(life, career) {
+  const skill = life.skills?.[career.skill] ?? 0;
+  if (life.age < career.minAge || skill < career.minimum) return false;
+  if (career.mana && life.mana < career.mana) return false;
+  if (career.literacy && (life.skills?.literacy ?? 0) < career.literacy) return false;
+  if (career.knight && !["王族", "貴族"].includes(life.status?.name) && currentStats(life).combat < 75) return false;
+  return true;
+}
+
+export function availableCareerOptions(life, { occupations, excludeCurrent = true } = {}) {
+  return CAREER_CATALOG.filter((career) => (!occupations || occupations.includes(career.occupation))
+    && (!excludeCurrent || career.occupation !== life.occupation)
+    && careerQualified(life, career));
+}
+
+function careerPreview(life, career) {
+  const salaryLife = {
+    ...life,
+    age: Math.max(life.age, 13),
+    occupation: career.occupation,
+    occupationRole: career.occupation,
+    occupationSkill: life.skills?.[career.skill] ?? 0,
+  };
+  const salary = monthlyBudget(salaryLife).income.work;
+  const situation = life.world?.situation ?? life.situation;
+  const situationLabel = situation && !["平和", "平穏"].includes(situation) ? `（${situation}）` : "";
+  const skill = Math.round(life.skills?.[career.skill] ?? 0);
+  return [
+    `月給${situationLabel}: 約${salary.toFixed(1)}G`,
+    `必要技能: ${skillName(career.skill)}${career.minimum}+（現在${skill}）・${career.description}`,
+  ];
+}
+
+function careerChoices(life, { occupations, effect = "career-start", excludeCurrent = true } = {}) {
+  return availableCareerOptions(life, { occupations, excludeCurrent }).map((career) => ({
+    label: `${career.occupation}を選ぶ`,
+    effect: `${effect}:${career.occupation}`,
+    preview: careerPreview(life, career),
+  }));
 }
 
 function processMonth(life, random) {
@@ -1355,6 +1355,7 @@ function marryNpc(life, npc, { arranged = false } = {}) {
   addRelationship(life, "spouse");
   life.childPlan = "later";
   life.nextChildAskAt = life.age + 0.5;
+  life.childDecisionOffered = false;
   npcNote(life, npc, arranged ? "見合いで結婚した" : "結婚した");
 }
 
@@ -1517,13 +1518,14 @@ function finishTraining(life, random, { early = false, silent = false } = {}) {
   life.trainingPlan = null;
   let text;
   if (!early && plan.graduateTo) {
-    changeOccupation(life, plan.graduateTo, plan.reason ?? `${plan.name}を終えて就職`);
-    text = `${plan.name}を終え、${plan.graduateTo}として歩み始めた。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。`;
-  } else if (early && TRAINEE_OCCUPATIONS.includes(life.occupation)) {
-    changeOccupation(life, "家業の手伝い", "修行の中断により家業へ戻る");
-    text = `${plan.name}は途中で打ち切られ、家業を手伝う暮らしに戻った。`;
+    life.graduationPending = true;
+    life.graduationSkill = plan.skill;
+    life.nextDecisionAt = life.age;
+    text = `${plan.name}を修了した。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。進路を選ぼう。`;
   } else {
-    text = early ? `${plan.name}は途中で終わった。` : `${plan.name}を修了した。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。`;
+    text = early
+      ? `${plan.name}は途中で終わった。今後の進路は自分で決める。`
+      : `${plan.name}を修了した。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。`;
   }
   if (!silent) appendEvent(life, text, "life", "教育", `edu-finish-${plan.kind}-${Math.floor(life.age)}`);
 }
@@ -1591,17 +1593,17 @@ function availableFunds(life, payer) {
   return payer === PAYER.PARENTS ? life.parents?.gold ?? 0 : life.gold ?? 0;
 }
 
-const toSilver = (value) => Math.round(value * TUNING.currency.silverPerLegacyG);
-const silver = (value) => `${toSilver(value)}銀貨`;
-const toSilverText = (text) => String(text).replace(/(-?[\d,]+(?:\.\d+)?)G/g, (_, amount) => silver(Number(amount.replaceAll(",", ""))));
-const gold = (value) => silver(value);
+const goldFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+export const formatGold = (value) => `${goldFormatter.format(Number(value) || 0)}G`;
+const gold = formatGold;
+const asText = (text) => String(text);
 
 function insufficientFundsReason(life, cost, payer) {
   const funds = availableFunds(life, payer);
   if (cost <= funds) return null;
   return payer === PAYER.PARENTS
-    ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(funds))}）`
-    : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(funds))}）`;
+    ? `親の財産が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`
+    : `所持金が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`;
 }
 
 function businessChance(life, size) {
@@ -1620,12 +1622,20 @@ const CHILDHOOD_CHOICE_REWARDS = Object.freeze({
   mentorFame: 2,
 });
 
+const steadyPreview = (detail, cost = "費用: なし") => [cost, detail];
+
 const CHOICE_RULES = {
   study: {
     preview: () => ["費用: なし", `メリット: 読み書き技能+${CHILDHOOD_CHOICE_REWARDS.studyLiteracy}、学習を継続`, "デメリット: 家業の手伝いによる収入・技能は得られない"],
   },
   work: {
     preview: () => ["費用: なし", `メリット: 所持金+${CHILDHOOD_CHOICE_REWARDS.workGold}G、仕事の技能+${CHILDHOOD_CHOICE_REWARDS.workSkill}`, "デメリット: 読み書きの学習は進まない"],
+  },
+  "work-practice": {
+    preview: (life) => [`技能: ${skillName(OCCUPATION_SKILLS[life.occupation] ?? "general")} +1`, "職業を変えず、今の仕事の腕を磨く"],
+  },
+  steady: {
+    preview: () => ["費用: なし", "今の暮らしを続ける"],
   },
   mentor: {
     preview: () => ["費用: なし", `メリット: 指導技能+${CHILDHOOD_CHOICE_REWARDS.mentorTeaching}、名声+${CHILDHOOD_CHOICE_REWARDS.mentorFame}`, "デメリット: 所持金や職業技能は増えない"],
@@ -1647,10 +1657,6 @@ const CHOICE_RULES = {
   },
   "edu-family-work": {
     preview: () => ["費用: なし", "成長する技能: 肉体労働・読み書き（独学）", "メリット: 家計を助けられる", "デメリット: 読み書きの習得が遅い"],
-  },
-  "edu-start-work": {
-    check: (life) => (life.age < 10 ? "まだ幼すぎて働けない" : null),
-    preview: () => ["費用: なし", "メリット: 早く収入を得られる", "デメリット: 教育を受ける機会を失う", "条件: 10歳以上"],
   },
   "apprentice-magic": {
     cost: 12,
@@ -1676,14 +1682,8 @@ const CHOICE_RULES = {
   "apprentice-family": {
     preview: () => ["費用: なし", "メリット: 家業を継ぐ準備ができる", "デメリット: 外の世界を知る機会が減る"],
   },
-  "apprentice-general": {
-    preview: () => ["費用: なし", "期間: 人間換算5年間", "良い師匠から職業技能を学ぶ", "見習いとして働きながら技術を身につける"],
-  },
   "path-academy": {
     preview: () => ["費用: なし", "入学条件を満たす学院の選考へ進む", "身分・適性・費用によって進学先が限られる"],
-  },
-  "apprentice-work": {
-    preview: () => ["費用: なし", "メリット: すぐに収入を得られる", "デメリット: 師匠や学院での指導は受けられない"],
   },
   "academy-magic": {
     cost: (life) => academyFunding(life, "magic").cost ?? 60,
@@ -1826,21 +1826,20 @@ export const CHOICE_EVENTS = [
     id: "edu-childhood", title: "学びのはじまり", category: "幼少期・教育", weight: 5, priority: true,
     requirements: { minAge: 6, maxAge: 12, oncePerLife: true, excludeRaceIds: ["dragon"], custom: (life) => !training(life) },
     copy: "読み書きを身につける年頃になった。家の事情を考えながら、学び方を決めよう。",
-    choices: [
+    choicesFor: (life) => [
       { label: "町の教室に通う", effect: "edu-town-school" },
       { label: "家庭教師から学ぶ", effect: "edu-tutor" },
       { label: "家業を手伝いながら独学する", effect: "edu-family-work" },
-      { label: "教育を受けず、働き始める", effect: "edu-start-work" },
+      ...careerChoices(life, { occupations: ["家業の手伝い", "農作業", "職人見習い", "服飾店の見習い"] }),
     ],
   },
   {
     id: "edu-apprenticeship", title: "進路を決める", category: "幼少期・教育", weight: 4, priority: true,
     requirements: { minAge: 12, maxAge: 15, oncePerLife: true, excludeRaceIds: ["dragon"], occupations: ["まだ幼い子ども", "家業の手伝い"], custom: (life) => !training(life) },
     copy: "人間換算12〜15歳になった。家業を手伝う、職業見習いに入る、学院を目指す、の三つから進路を選ぶ。",
-    choices: [
-      { label: "家業を手伝う", effect: "apprentice-family" },
-      { label: "職業見習いに入る", effect: "apprentice-general" },
-      { label: "学院を目指す", effect: "path-academy" },
+    choicesFor: (life) => [
+      ...careerChoices(life, { occupations: ["家業の手伝い", "農作業", ...CRAFT_OCCUPATIONS, "兵士", "商人"] }),
+      { label: "学院を目指す", effect: "path-academy", preview: ["費用: 入学後に確認", "適性・学費に合う学院を探す"] },
     ],
   },
   {
@@ -1859,6 +1858,26 @@ export const CHOICE_EVENTS = [
     ],
   },
   {
+    id: "choice-career-graduation", title: "卒業後の進路", category: "職業・昇進", weight: 10, priority: true,
+    requirements: { custom: (life) => life.graduationPending === true },
+    copy: "学院・修行を終えた。適性に合う職業の月給と必要技能を比べて、進路を選ぼう。",
+    choicesFor: (life) => {
+      const jobsBySkill = {
+        magic: ["魔術師", "教師", "学者", "商人", "農作業", "家業の手伝い"],
+        swordsmanship: ["騎士", "兵士", "冒険者", "農作業", "家業の手伝い"],
+        scholarship: ["学者", "教師", "商人", "農作業", "家業の手伝い"],
+        craft: ["職人見習い", "鍛冶職人", "服飾店の見習い", "商人", "農作業"],
+        smithing: ["鍛冶職人", "職人見習い", "商人", "農作業"],
+        tailoring: ["服飾店の見習い", "職人見習い", "商人", "農作業"],
+      };
+      const occupations = jobsBySkill[life.graduationSkill] ?? ["教師", "商人", "職人見習い", "農作業", "家業の手伝い"];
+      return [
+        ...careerChoices(life, { occupations, effect: "career-graduate", excludeCurrent: false }),
+        { label: "今は働かず、進路を保留する", effect: "graduate-defer", preview: ["月給: なし", "就職先は後の選択で決める"] },
+      ];
+    },
+  },
+  {
     id: "choice-ore-contract", title: "魔鉱石の加工依頼", category: "職業・昇進", weight: 1.3,
     requirements: { minAge: 18, minimumGold: 8, occupations: [...CRAFT_OCCUPATIONS, "工房主"] },
     copy: "魔鉱石を加工してほしいと依頼が届いた。材料費は8G。腕と器用さを頼りに受けるか、断るか。",
@@ -1872,26 +1891,27 @@ export const CHOICE_EVENTS = [
   },
   {
     id: "choice-work-offer", title: "遠方からの仕事の誘い", category: "職業・昇進", weight: 1,
-    requirements: { minAge: 20, occupations: ["農作業", ...CRAFT_OCCUPATIONS, "兵士", "商人", "冒険者", "教師"] },
-    copy: "別の町から求人が届いた。応募条件を満たす仕事を選べるが、採用されるとは限らない。",
-    choicesFor: (life) => {
-      const literacy = life.skills?.literacy ?? 0;
-      const trade = life.skills?.trade ?? 0;
-      const academic = life.skills?.scholarship ?? 0;
-      const magic = life.skills?.magic ?? 0;
-      const offers = [{ tier: 1, job: "農作業", eligible: true }];
-      if (literacy >= 10) offers.push({ tier: 2, job: "職人見習い", eligible: true });
-      if (trade >= 20 || literacy >= 30) offers.push({ tier: 3, job: "商人", eligible: true });
-      if (academic >= 60 && literacy >= 40) offers.push({ tier: 4, job: "教師", eligible: true });
-      if (magic >= 80 && life.mana >= 20) offers.push({ tier: 5, job: "魔術師", eligible: true });
-      return [
-        ...offers.map(({ tier, job }) => ({
-          label: `${job}に応募（採用率${Math.round(TUNING.jobAcceptanceRates[tier - 1] * 100)}%）`,
-          effect: `job-application:${tier}:${job}`,
-        })),
-        { label: "今の仕事を続ける", effect: "steady" },
-      ];
+    requirements: {
+      minAge: 14, cooldownYears: (life) => life.occupation === "失業中" ? 2 : 8,
+      custom: (life) => (life.age >= 20 || life.occupation === "失業中") && availableCareerOptions(life).length > 0,
     },
+    copy: "別の町から求人が届いた。必要技能と月給を確認して、今の仕事から移るか選べる。",
+    choicesFor: (life) => [
+      ...careerChoices(life, { effect: "career-change" }),
+      { label: "今の仕事を続ける", effect: "steady", preview: ["月給: 現在の職業を継続", "転職せず、今の仕事に取り組む"] },
+    ],
+  },
+  {
+    id: "choice-work-practice", title: "仕事の腕を磨く", category: "職業・昇進", weight: 0.7,
+    requirements: {
+      minAge: 13, cooldownYears: 3,
+      custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation) && !training(life),
+    },
+    copy: "仕事の取り組み方を見直す機会が訪れた。技能を磨くか、今の働き方を続けるか選べる。",
+    choices: [
+      { label: "職業技能を磨く", effect: "work-practice" },
+      { label: "今の仕事を続ける", effect: "steady", preview: steadyPreview("今の技能と働き方を維持する") },
+    ],
   },
   {
     id: "choice-business-loan", title: "商人からの融資", category: "財産・借金", weight: 0.8,
@@ -1909,7 +1929,7 @@ export const CHOICE_EVENTS = [
     id: "choice-repay-debt", title: "借金の返済", category: "財産・借金", weight: 1.2,
     requirements: { minAge: 18, minimumGold: 10, custom: (life) => life.debt >= 5, cooldownYears: 4 },
     copy: "まとまった手持ちができた。借金が利息を生み続けている。",
-    choices: [{ label: "手持ちで借金を返す", effect: "repay-debt" }, { label: "返済は毎月の分だけにする", effect: "steady" }],
+    choices: [{ label: "手持ちで借金を返す", effect: "repay-debt" }, { label: "返済は毎月の分だけにする", effect: "steady", preview: steadyPreview("決まった月々の返済を続ける", "追加費用: なし") }],
   },
   {
     id: "choice-buy-home", title: "家を持つ", category: "財産・借金", weight: 0.9,
@@ -1926,13 +1946,13 @@ export const CHOICE_EVENTS = [
     id: "choice-sell-home", title: "住まいを売る", category: "財産・借金", weight: 0.4,
     requirements: { minAge: 25, custom: (life) => Boolean(life.ownsHome), cooldownYears: 8 },
     copy: "家の維持費はかからないが、まとまった資金が必要なら売却できる。",
-    choices: [{ label: "家を売る", effect: "sell-home" }, { label: "今の家に住み続ける", effect: "steady" }],
+    choices: [{ label: "家を売る", effect: "sell-home" }, { label: "今の家に住み続ける", effect: "steady", preview: steadyPreview("家を売らず、住み続ける") }],
   },
   {
     id: "choice-open-shop", title: "自分の工房を開く", category: "職業・昇進", weight: 0.9,
     requirements: { minAge: 25, minimumGold: 30, minimumSkill: 50, occupations: CRAFT_OCCUPATIONS, oncePerLife: true },
     copy: "腕に自信がつき、独立の話が出た。工房を借りるには30Gが要る。",
-    choices: [{ label: "30Gで工房を開く", effect: "open-shop-choice" }, { label: "親方のもとで働き続ける", effect: "steady" }],
+    choices: [{ label: "30Gで工房を開く", effect: "open-shop-choice" }, { label: "親方のもとで働き続ける", effect: "steady", preview: steadyPreview("親方のもとで働き続ける") }],
   },
   {
     id: "choice-retirement", title: "これからの働き方", category: "職業・昇進", weight: 1, priority: true,
@@ -1942,10 +1962,10 @@ export const CHOICE_EVENTS = [
         && !life.historyFlags?.includes("retirement-choice-resolved"),
     },
     copy: "人間換算で65歳を迎えた。仕事を退くか、続けるか、別の道へ移るかを選べる。",
-    choices: [
+    choicesFor: (life) => [
       { label: "今の仕事を退く", effect: "retire-now" },
       { label: "今の仕事を続ける", effect: "keep-working" },
-      { label: "別の仕事へ移る", effect: "retire-career-change" },
+      ...careerChoices(life, { effect: "career-change" }),
     ],
   },
   {
@@ -1993,14 +2013,14 @@ export const CHOICE_EVENTS = [
       { label: `小規模（${gold(TUNING.business.small.cost)}）`, effect: "business-expand:small" },
       { label: `中規模（${gold(TUNING.business.medium.cost)}）`, effect: "business-expand:medium" },
       { label: `大規模（${gold(TUNING.business.large.cost)}）`, effect: "business-expand:large" },
-      { label: "今回は見送る", effect: "steady" },
+      { label: "今回は見送る", effect: "steady", preview: steadyPreview("投資を見送り、現在の商売を続ける") },
     ],
   },
   {
     id: "choice-buy-gear", title: "装備を新調する", category: "財産・借金", weight: 0.9,
     requirements: { minAge: 18, minimumGold: 10, occupations: ["兵士", "冒険者"], requiresNotFlag: "good-gear" },
     copy: "武器や防具が傷んできた。新しい装備を整えるか、今あるもので凌ぐか。",
-    choices: [{ label: "10Gで装備を整える", effect: "buy-gear" }, { label: "今の装備を使い続ける", effect: "steady" }],
+    choices: [{ label: "10Gで装備を整える", effect: "buy-gear" }, { label: "今の装備を使い続ける", effect: "steady", preview: steadyPreview("今の装備を使い続ける") }],
   },
   {
     id: "choice-support-family", title: "家族への仕送り", category: "家族・人間関係", weight: 0.8,
@@ -2053,7 +2073,7 @@ export const CHOICE_EVENTS = [
         && life.age >= (life.nextChildAskAt ?? 0)
         && (femalePartner(life)?.humanAge ?? Infinity) <= TUNING.childDecisionMaxHumanAge,
     },
-    copy: (life) => `${life.spouse ?? "配偶者"}と、これからの家族について話し合うことになった。子供を持つかどうか、二人の意思で決められる。`,
+    copy: (life) => `${life.spouse ?? "配偶者"}と、そろそろ子供を迎えるか話し合うことになった。${livingChildren(life).length ? "次の子供を持つか" : "一人目の子供を持つか"}、二人で決められる。`,
     choices: [
       { label: "子供を持ちたい", effect: "children-yes" },
       { label: "今はまだいい", effect: "children-later" },
@@ -2086,7 +2106,7 @@ export const CHOICE_EVENTS = [
     copy: "残った後遺症を専門治療で回復できる可能性がある。後遺症ごとに挑戦は一度だけ。",
     choices: [
       { label: "専門治療を受ける", effect: "sequela-recovery" },
-      { label: "今の状態を受け入れる", effect: "steady" },
+      { label: "今の状態を受け入れる", effect: "steady", preview: steadyPreview("後遺症を受け入れ、治療はしない") },
     ],
   },
   {
@@ -2113,13 +2133,34 @@ export function availableChoiceEvents(life) {
   return CHOICE_EVENTS.filter((event) => isRoutineEventEligible(life, event));
 }
 
-function decorateChoice(life, choice) {
+const CHOICE_PREVIEW_COST_PREFIXES = ["費用", "授業料", "通常医療費", "魔法医療費", "受験料", "無利子貸与"];
+const CHOICE_PREVIEW_DETAIL_PREFIXES = ["メリット", "成長する技能", "月給", "必要技能", "基本成功率", "成功率", "危険度", "売却額", "期間", "条件", "入学条件"];
+
+export function compactChoicePreview(preview) {
+  const lines = (preview ?? []).filter(Boolean);
+  if (lines.length <= 2) return lines;
+  const hasPrefix = (line, prefixes) => prefixes.some((prefix) => line.startsWith(`${prefix}:`));
+  const cost = lines.find((line) => hasPrefix(line, CHOICE_PREVIEW_COST_PREFIXES));
+  const details = lines.filter((line) => hasPrefix(line, CHOICE_PREVIEW_DETAIL_PREFIXES) && line !== cost).slice(0, 2);
+  const downside = lines.find((line) => line.startsWith("デメリット:"));
+  const primary = cost ?? lines[0];
+  const selectedDetails = details.filter((line) => line !== primary);
+  if (downside && downside !== primary && selectedDetails.length < 2) selectedDetails.push(downside.replace(/^デメリット:\s*/, "注意: "));
+  if (selectedDetails.length === 0) {
+    const other = lines.find((line) => line !== primary);
+    if (other) selectedDetails.push(other);
+  }
+  return [primary, selectedDetails.join("／")].filter(Boolean);
+}
+
+export function decorateChoice(life, choice) {
   const rule = CHOICE_RULES[choice.effect] ?? CHOICE_RULES[choice.effect.split(":")[0]];
-  if (!rule) return { ...choice };
+  if (!rule) return { ...choice, preview: compactChoicePreview(choice.preview) };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
   const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
-  return { ...choice, cost, payer, preview: rule.preview?.(life, cost) ?? [], disabledReason };
+  const preview = choice.preview?.length ? choice.preview : rule.preview?.(life, cost);
+  return { ...choice, cost, payer, preview: compactChoicePreview(preview), disabledReason };
 }
 
 export function choiceAvailability(life, effect) {
@@ -2144,16 +2185,18 @@ function buildDecision(life, event, random) {
     .map((choice) => decorateChoice(life, choice))
     .map((choice) => ({
       ...choice,
-      label: toSilverText(choice.label),
-      preview: (choice.preview ?? []).map(toSilverText),
-      disabledReason: choice.disabledReason ? toSilverText(choice.disabledReason) : null,
+      label: asText(choice.label),
+      preview: compactChoicePreview(choice.preview).map(asText),
+      disabledReason: choice.disabledReason ? asText(choice.disabledReason) : null,
     }));
-  decision.copy = toSilverText(decision.copy);
+  decision.copy = asText(decision.copy);
   return decision;
 }
 
 function decisionFor(life, random) {
   const eligible = availableChoiceEvents(life);
+  const firstChildChoice = eligible.find((event) => event.id === "choice-children" && life.childDecisionOffered !== true);
+  if (firstChildChoice) return buildDecision(life, firstChildChoice, random);
   const priority = eligible.filter((event) => event.priority);
   const pool = priority.length > 0 ? priority : eligible;
   if (pool.length > 0 && (priority.length > 0 || random() < 0.65)) {
@@ -2212,15 +2255,15 @@ function decisionFor(life, random) {
       title: "進む道",
       copy: "将来について考える時が来ました。興味のある道を選んでみましょう。",
       choices: [
-        { label: "仕事の見習いを始める", effect: "apprentice" },
+        { label: "職業技能を磨く", effect: "work-practice" },
         { label: "学びを続けて備える", effect: "study" },
       ],
     },
     youngAdult: {
-      title: "新しい仕事の誘い",
-      copy: `知人から仕事の話が届きました。今の暮らしを変える機会かもしれません。`,
+      title: "仕事との向き合い方",
+      copy: "今の職業を続けるか、仕事の技能を磨くかを決めましょう。",
       choices: [
-        { label: "新しい仕事に挑戦する", effect: "career" },
+        { label: "職業技能を磨く", effect: "work-practice" },
         { label: "今の仕事を続ける", effect: "steady" },
       ],
     },
@@ -2252,8 +2295,8 @@ function decisionFor(life, random) {
       const decorated = decorateChoice(life, choice);
       return {
         ...decorated,
-        label: toSilverText(decorated.label),
-        preview: (decorated.preview ?? []).map(toSilverText),
+        label: asText(decorated.label),
+        preview: compactChoicePreview(decorated.preview).map(asText),
       };
     }),
   };
@@ -2317,7 +2360,8 @@ export function applyChoice(life, choice, random = Math.random) {
     }
   }
   let message;
-  switch (selected.effect.split(":")[0]) {
+  const effectType = selected.effect.split(":")[0];
+  switch (effectType) {
     case "will-legal":
       life.will = { type: "legal", targetId: null, charity: null };
       message = "財産を通常の相続割合で分ける遺言を残した。";
@@ -2367,14 +2411,6 @@ export function applyChoice(life, choice, random = Math.random) {
       addFlag(life, "retirement-choice-resolved");
       message = `${life.occupation}として働き続けることにした。再就職や転職の機会は今後もある。`;
       break;
-    case "retire-career-change": {
-      const previous = life.occupation;
-      const next = randomItem(["農作業", "商人", "教師", "工房主"], random);
-      changeOccupation(life, next, "65歳で別の仕事を選択");
-      addFlag(life, "retirement-choice-resolved");
-      message = `${previous}から${next}へ移り、新しい仕事を始めることにした。`;
-      break;
-    }
     case "promotion-apply": {
       const step = nextPromotionStep(life);
       if (!step) {
@@ -2426,7 +2462,6 @@ export function applyChoice(life, choice, random = Math.random) {
       addFlag(life, "continued-education");
       life.educationStatus = "学習継続中";
       if (life.age < 13) life.school ??= { id: "home-study", name: "家庭学習" };
-      if (!life.trainingPlan) setSkillPractice(life, "literacy", 0.5, 0.6);
       message = "学びを続け、新しい知識を身につけた。";
       break;
     case "work":
@@ -2437,34 +2472,44 @@ export function applyChoice(life, choice, random = Math.random) {
       addFlag(life, "helped-family-work");
       message = "家の仕事を手伝い、暮らしを支えた。";
       break;
-    case "apprentice":
-      changeOccupation(life, pickCareer(life, random), "本人が見習いを選択");
-      life.educationStatus = "職人修行中";
-      message = `${life.occupation}として見習いを始めた。`;
-      life.gold += 4;
-      break;
-    case "career":
-      changeOccupation(life, pickCareer(life, random), "本人が就職・転職を選択");
-      life.gold += 8 + Math.floor(random() * 8);
-      life.fame += 1;
-      message = `${life.occupation}の仕事を始め、新しい一歩を踏み出した。`;
-      break;
-    case "job-application": {
-      const [, tierText, job] = selected.effect.split(":");
-      const tier = Number(tierText);
-      const rate = TUNING.jobAcceptanceRates[tier - 1];
+    case "career-start":
+    case "career-change":
+    case "career-graduate": {
+      const [, job] = selected.effect.split(":");
+      const career = CAREER_CATALOG.find((item) => item.occupation === job);
+      if (!career || !careerQualified(life, career)) {
+        message = "必要な適性や技能を満たしていないため、その職業には就けなかった。";
+        break;
+      }
+      if (effectType !== "career-graduate" && job === life.occupation) {
+        message = `すでに${job}として働いているため、転職は行わなかった。`;
+        break;
+      }
       const previousJob = life.occupation;
       const previousSalary = monthlyBudget(life).income.work;
-      if (random() < rate) {
-        changeOccupation(life, job, "求人への応募に採用");
-        const nextSalary = monthlyBudget(life).income.work;
-        message = `応募が採用され、${previousJob}から${job}へ移った。月収は約${gold(previousSalary)}から${gold(nextSalary)}になった。`;
-      } else {
-        message = `${job}の選考に落ち、${previousJob}を続けることになった（採用率${Math.round(rate * 100)}%）。`;
+      changeOccupation(life, job, effectType === "career-start" ? "本人が初めての仕事を選択"
+        : effectType === "career-graduate" ? "卒業後の職業を選択" : "本人が転職先を選択");
+      life.graduationPending = false;
+      life.graduationSkill = null;
+      life.educationStatus = "就労";
+      if (effectType === "career-change" && life.age >= TUNING.retirementHumanAge) {
+        addFlag(life, "retirement-choice-resolved");
       }
-      notes.push(`採用判定: 固定${Math.round(rate * 100)}%（能力・推薦による確率加算なし）`);
+      const nextSalary = monthlyBudget(life).income.work;
+      message = `${job}を選び、${previousJob}から移った。月給は約${previousSalary.toFixed(1)}Gから${nextSalary.toFixed(1)}Gになった。`;
       break;
     }
+    case "graduate-defer":
+      changeOccupation(life, "失業中", "卒業後の進路を保留");
+      life.graduationPending = false;
+      life.graduationSkill = null;
+      life.educationStatus = "就職先を探している";
+      message = "すぐには就職せず、進路を考える時間を取ることにした。";
+      break;
+    case "work-practice":
+      addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 1, "仕事への取り組み");
+      message = `${occupationTitle(life)}の技能を1伸ばすことに集中した。`;
+      break;
     case "steady":
       message = `${life.occupation}の仕事と今の暮らしを続けることにした。`;
       break;
@@ -2611,6 +2656,7 @@ export function applyChoice(life, choice, random = Math.random) {
     }
     case "children-yes":
       life.childPlan = "wants";
+      life.childDecisionOffered = true;
       life.tryingSince = life.age;
       life.tryingUntil = life.age + 1;
       life.tryingMotherAge = femalePartner(life)?.humanAge ?? null;
@@ -2618,11 +2664,13 @@ export function applyChoice(life, choice, random = Math.random) {
       break;
     case "children-later":
       life.childPlan = "later";
+      life.childDecisionOffered = true;
       life.nextChildAskAt = life.age + childRetryDelay(random);
       message = "子供のことは、今はまだ考えないことにした。数年後に改めて話し合う。";
       break;
     case "children-never":
       life.childPlan = "none";
+      life.childDecisionOffered = true;
       message = "二人で話し合い、これからも子供は持たないと決めた。";
       break;
     case "mend-marriage":
@@ -2771,11 +2819,6 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "家の仕事を手伝いながら、合間に独学で読み書きを覚えることにした。";
       notes.push("職業: 家業の手伝い", "読み書きは独学（学習環境×0.6）");
       break;
-    case "edu-start-work":
-      changeOccupation(life, pickCareer(life, random), "教育を受けず働き始めた");
-      life.educationStatus = "教育を受けずに就労";
-      message = `教育は受けず、${life.occupation}として働き始めた。`;
-      break;
     case "apprentice-magic":
     case "apprentice-sword": {
       const magicPath = selected.effect === "apprentice-magic";
@@ -2817,28 +2860,6 @@ export function applyChoice(life, choice, random = Math.random) {
       changeOccupation(life, "家業の手伝い", "家業を継ぐ準備");
       life.educationStatus = "家業を継ぐ準備";
       message = "家業を手伝いながら、いずれ継ぐための仕事を覚え始めた。";
-      break;
-    case "apprentice-general": {
-      const occupation = randomItem(["職人見習い", "服飾店の見習い", "鍛冶職人"], random);
-      const skill = OCCUPATION_SKILLS[occupation];
-      const mentor = createNpc(life, random, {
-        relationship: "職業の師匠", humanAge: 35 + random() * 25,
-        occupation, affinity: 50, firstContact: "職業見習いとして受け入れた",
-      });
-      const quality = mentorQuality(random);
-      startTraining(life, random, {
-        kind: "apprenticeship", name: `${mentor.name}のもとでの${occupation}`,
-        skill, activity: 1, learning: quality.learning, years: 5, mentor,
-        status: `${occupation}として修業中`, occupation, occupationReason: "職業見習いを選択",
-      });
-      message = `${mentor.name}のもとで${occupation}として働きながら、技術を学ぶことにした。`;
-      notes.push(`修業期間: 人間換算5年間`, `学習環境×${quality.learning}`);
-      break;
-    }
-    case "apprentice-work":
-      changeOccupation(life, pickCareer(life, random), "弟子入りせず働き始めた");
-      life.educationStatus = "就労";
-      message = `弟子入りせず、${life.occupation}として働き始めた。`;
       break;
     case "academy-magic":
     case "academy-knight":
@@ -2970,16 +2991,23 @@ export function applyChoice(life, choice, random = Math.random) {
   const detail = [...changes, ...notes];
   life.lastResult = {
     title: decision.title,
-    choice: toSilverText(selected.label),
-    message: toSilverText(message),
-    details: detail.map(toSilverText),
+    choice: asText(selected.label),
+    message: asText(message),
+    details: detail.map(asText),
     age: life.age,
   };
   if (changes.length) message = `${message}（${changes.join("、")}）`;
   life.pendingDecision = null;
   life.playing = true;
   appendEvent(life, message, "life", "選択", `${decision.id}-result`);
-  life.nextDecisionAt = life.age + rollExponential(TUNING.decisionMeanYears, random);
+  const mother = femalePartner(life);
+  const firstChildDecisionAt = life.spouseId && life.childPlan === "later" && life.childDecisionOffered !== true
+    && mother && mother.humanAge <= TUNING.childDecisionMaxHumanAge
+    ? Math.max(life.age, life.nextChildAskAt ?? life.age)
+    : Infinity;
+  life.nextDecisionAt = Number.isFinite(firstChildDecisionAt)
+    ? firstChildDecisionAt
+    : life.age + rollExponential(TUNING.decisionMeanYears, random);
   scheduleLog(life, random);
   return message;
 }
@@ -3087,7 +3115,7 @@ function die(life, cause) {
   life.deathAge = life.age;
   const heirs = settleInheritance(life);
   const detail = heirs.length
-    ? ` 相続財産${silver(life.inheritanceEstate)}を${heirs.map((heir) => `${heir.name}へ${silver(heir.amount)}`).join("、")}分けた。`
+    ? ` 相続財産${gold(life.inheritanceEstate)}を${heirs.map((heir) => `${heir.name}へ${gold(heir.amount)}`).join("、")}分けた。`
     : ` 借金を清算した後の財産は${life.inheritanceTo}へ帰属した。`;
   const titleDetail = life.titleSuccession
     ? life.titleSuccession.heirName
@@ -3180,15 +3208,6 @@ function monthlyUpdate(life, random) {
     const strain = life.gold < 3 && life.debt > 5 ? -0.35 : 0;
     const settle = (55 - life.marriage.harmony) * 0.006;
     adjustHarmony(life, strain + settle + (random() - 0.5) * 2.6);
-  }
-  if (life.occupation === "失業中") {
-    const chance = life.world?.situation === "不況" ? 0.02 : 0.1;
-    if (random() < chance) {
-      const previous = life.unemployedFrom ?? "家業の手伝い";
-      life.unemployedFrom = null;
-      changeOccupation(life, previous, "再就職", true);
-      appendEvent(life, `新しい勤め口が見つかり、${previous}として再び働き始めた。`, "life", "再就職", `reemployed-${Math.floor(life.age)}`);
-    }
   }
 }
 

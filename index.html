@@ -65,14 +65,17 @@
             </div>
           </div>
         </section>
-        <section class="log-card" aria-labelledby="journal-heading">
-          <div class="log-head">
-            <h2 id="journal-heading">最近の出来事</h2>
-            <span class="log-count"><span id="event-count">0</span> 件</span>
-          </div>
-          <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
-          <button class="link-button" id="open-history-inline" type="button">過去の記録をすべて見る ›</button>
-        </section>
+        <div class="character-scene" data-region="kingdom">
+          <canvas id="character-canvas" width="400" height="150" role="img" aria-label="人生の道を歩む主人公のドット絵"></canvas>
+          <span class="scene-caption" id="scene-caption"></span>
+        </div>
+        <div class="quick-stats">
+          <button type="button" class="quick-stat" id="open-status"><small>職業</small><strong id="occupation-value">---</strong></button>
+          <div class="quick-stat static"><small>健康</small><strong id="health-value">健やか</strong></div>
+          <button type="button" class="quick-stat" id="open-money"><small>所持金</small><strong id="gold-value">0G</strong></button>
+        </div>
+        <p class="family-line" id="people-value">家族</p>
+        <button class="link-button" id="open-status-2" type="button">詳細ステータス ›</button>
         <section class="ability-panel" aria-labelledby="ability-heading">
           <header class="ability-heading">
             <h2 id="ability-heading">基礎能力</h2>
@@ -106,17 +109,14 @@
           </div>
           <p class="ability-note">棒の長さは0〜200を基準に表示しています。</p>
         </section>
-        <div class="character-scene" data-region="kingdom">
-          <canvas id="character-canvas" width="400" height="150" role="img" aria-label="人生の道を歩む主人公のドット絵"></canvas>
-          <span class="scene-caption" id="scene-caption"></span>
-        </div>
-        <div class="quick-stats">
-          <button type="button" class="quick-stat" id="open-status"><small>職業</small><strong id="occupation-value">---</strong></button>
-          <div class="quick-stat static"><small>健康</small><strong id="health-value">健やか</strong></div>
-          <button type="button" class="quick-stat" id="open-money"><small>所持金</small><strong id="gold-value">0G</strong></button>
-        </div>
-        <p class="family-line" id="people-value">家族</p>
-        <button class="link-button" id="open-status-2" type="button">詳細ステータス ›</button>
+        <section class="log-card" aria-labelledby="journal-heading">
+          <div class="log-head">
+            <h2 id="journal-heading">最近の出来事</h2>
+            <span class="log-count"><span id="event-count">0</span> 件</span>
+          </div>
+          <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
+          <button class="link-button" id="open-history-inline" type="button">過去の記録をすべて見る ›</button>
+        </section>
       </section>
 
       <footer class="build-line"><span id="build-id">build: dev</span></footer>

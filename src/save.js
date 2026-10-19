@@ -1,7 +1,36 @@
-import { NATIONS, RACES, SAVE_VERSION, SKILL_IDS_LIST } from "./simulation.js";
+import { formatGold, NATIONS, RACES, SAVE_VERSION, SKILL_IDS_LIST, TUNING } from "./simulation.js";
 import { RACE_ADULT_MEAN, STAT_KEYS } from "./stats.js";
 
 export const SAVE_KEY = "tomoshibi-save";
+
+// Historical logs used 30 silver coins per G.
+const LEGACY_SILVER_PER_G = 30;
+
+function migrateLegacyCurrencyText(value) {
+  if (typeof value === "string") {
+    return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => formatGold(Number(amount.replaceAll(",", "")) / LEGACY_SILVER_PER_G));
+  }
+  return value;
+}
+
+function migrateLegacyJournal(journal) {
+  if (!Array.isArray(journal)) return journal;
+  return journal.map((entry) => {
+    if (typeof entry === "string") return migrateLegacyCurrencyText(entry);
+    return entry && typeof entry === "object" ? { ...entry, text: migrateLegacyCurrencyText(entry.text) } : entry;
+  });
+}
+
+function migrateLegacyResult(result) {
+  if (!result || typeof result !== "object") return result;
+  return {
+    ...result,
+    title: migrateLegacyCurrencyText(result.title),
+    choice: migrateLegacyCurrencyText(result.choice),
+    message: migrateLegacyCurrencyText(result.message),
+    details: Array.isArray(result.details) ? result.details.map(migrateLegacyCurrencyText) : result.details,
+  };
+}
 
 // Race and nation are stored by id and re-attached on load, so a save never holds a stale copy of the tables.
 export function serializeLife(life) {
@@ -27,6 +56,8 @@ function missingDefaults(life) {
     trainingSkill: null,
     occupationRole: life.occupation ?? "まだ幼い子ども",
     promotionNote: "",
+    graduationPending: false,
+    graduationSkill: null,
     finance: { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 },
     childPlan: "unset",
     nextChildAskAt: (life.age ?? 0) + 1,
@@ -69,6 +100,7 @@ function missingDefaults(life) {
 export function migrateLife(data) {
   if (!data || typeof data !== "object") throw new Error("invalid save");
   const life = data;
+  const migrateSilverText = (life.saveVersion ?? 0) < SAVE_VERSION;
   life.race = RACES.find((race) => race.id === life.race) ?? RACES[0];
   life.nation = NATIONS.find((nation) => nation.id === life.nation) ?? NATIONS[0];
   const defaults = missingDefaults(life);
@@ -110,13 +142,19 @@ export function migrateLife(data) {
   life.active ??= true;
   if (life.pendingDecision) life.pendingDecision = null;
   life.playing = false;
+  delete life.nextDecisionLimitReached;
   life.saveVersion = SAVE_VERSION;
   life.currencySchema ??= "legacy-G-v1";
-  if (life.ownsHome && !life.homeType) {
-    life.homeType = "small";
-    life.homeValue = 40;
+  if (migrateSilverText) {
+    life.journal = migrateLegacyJournal(life.journal);
+    life.lastResult = migrateLegacyResult(life.lastResult);
   }
-  if (life.ownsHome && !life.homeValue) life.homeValue = 40;
+  if (life.ownsHome) {
+    life.homeType ??= "small";
+    if (!life.homeValue || (migrateSilverText && life.homeType === "small" && life.homeValue < TUNING.homePricesLegacyG.small)) {
+      life.homeValue = TUNING.homePricesLegacyG.small;
+    }
+  }
   life.will ??= { type: "legal", targetId: null, charity: null };
   return life;
 }

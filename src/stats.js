@@ -155,12 +155,9 @@ export function developmentFactor(humanAge) {
 
 export function currentStats(life) {
   const baseline = life.baseStats ?? {};
-  const age = life.age ?? 0;
   const result = {};
   for (const key of STAT_KEYS) {
-    const adult = baseline[key] ?? 50;
-    const factor = key === "body" ? bodyAgeFactor(age) : key === "combat" ? Math.min(bodyAgeFactor(age), 1) : developmentFactor(age);
-    result[key] = key === "charm" || key === "luck" ? adult : adult * factor;
+    result[key] = baseline[key] ?? 50;
   }
   result.mana = life.mana ?? 0;
   return result;
