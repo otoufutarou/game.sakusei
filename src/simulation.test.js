@@ -12,6 +12,7 @@ import {
   NATIONS,
   applyChoice,
   choiceAvailability,
+  formatGold,
   monthlyBudget,
   occupationTitle,
   applyRoutineEffect,
@@ -89,6 +90,7 @@ function lifeForEvent(event) {
     life.graduationPending = true;
     life.graduationSkill = "scholarship";
   }
+  if (event.id === "choice-work-practice") life.occupation = "農作業";
   const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", gender: "女性", alive: true, affinity: 60, history: [] });
   life.mana = 50;
   if (/arranged/.test(event.id)) life.status = { name: "貴族" };
@@ -405,6 +407,19 @@ test("changing careers preserves learned skills and records the transition reaso
   assert.equal(life.careerHistory.at(-1).from, "職人見習い");
   assert.equal(life.careerHistory.at(-1).to, "家業の手伝い");
   assert.match(life.careerHistory.at(-1).reason, /本人/);
+});
+
+test("stale career choices cannot assign an unqualified or unknown occupation", () => {
+  const life = makeLife({
+    occupation: "職人見習い",
+    pendingDecision: { id: "stale-career-choice", choices: [{ effect: "career-start:魔術師" }] },
+  });
+  applyChoice(life, { effect: "career-start:魔術師" }, () => 0);
+  assert.equal(life.occupation, "職人見習い");
+  assert.match(life.lastResult.message, /適性や技能を満たしていない/);
+  life.pendingDecision = { id: "unknown-career-choice", choices: [{ effect: "career-start:未知の職業" }] };
+  applyChoice(life, { effect: "career-start:未知の職業" }, () => 0);
+  assert.equal(life.occupation, "職人見習い");
 });
 
 test("choosing a magic mentor creates a persistent contact and ongoing skill practice", () => {
@@ -860,7 +875,7 @@ test("meeting NPCs, romance, and marriage run through persistent NPCs and refusa
   let married = 0;
   let met = 0;
   for (let seed = 1; seed <= 30; seed += 1) {
-    const { life, random } = adultLife(seed, { age: 22, gold: 120, nextSocialAt: 22 });
+    const { life, random } = adultLife(seed, { age: 22, gold: 200, nextSocialAt: 22 });
     life.status = { name: "都市平民" };
     for (let step = 0; step < 160 && life.age < 40; step += 1) {
       life.nextSocialAt = Math.min(life.nextSocialAt, life.age + 0.2);
@@ -876,7 +891,7 @@ test("meeting NPCs, romance, and marriage run through persistent NPCs and refusa
     if (life.spouseId) married += 1;
   }
   assert.ok(met >= 25, "people are met");
-  assert.ok(married >= 1, `some lives reach marriage (${married}/30)`);
+  assert.ok(married >= 3, `some lives reach marriage (${married}/30)`);
   assert.ok(married < 30, "marriage is not guaranteed");
 });
 
@@ -1021,6 +1036,9 @@ test("death settles the estate to living spouse and children without passing deb
 });
 
 test("balances stay unchanged in G and old silver-denominated log text is migrated", () => {
+  assert.equal(formatGold(0.04), "0.04G");
+  assert.equal(formatGold(12.3), "12.3G");
+  assert.equal(formatGold(1666.666), "1,666.67G");
   const legacy = migrateLife({
     name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2,
     journal: [{ text: "相続財産1800銀貨" }],

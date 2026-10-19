@@ -463,7 +463,7 @@ export function createLife(random = Math.random) {
 }
 
 function appendEvent(life, text, kind = "life", label = "人生", id = null) {
-  const event = { age: life.age, text: toGoldText(text), kind, label, id };
+  const event = { age: life.age, text: asText(text), kind, label, id };
   life.journal.push(event);
   life.eventCount += 1;
   if (id) life.eventHistory.push({ id, age: life.age });
@@ -689,7 +689,7 @@ export function applyRoutineEffect(life, event, random = Math.random) {
   }
 }
 
-function changeOccupation(life, occupation, reason = "就職・転職", restore = false) {
+function changeOccupation(life, occupation, reason = "就職・転職") {
   if (life.occupation === occupation) return;
   ensureSkillState(life);
   const previous = life.occupation;
@@ -701,9 +701,8 @@ function changeOccupation(life, occupation, reason = "就職・転職", restore 
     yearsInPrevious: Math.round((life.occupationYears ?? 0) * 10) / 10,
   });
   life.occupation = occupation;
-  const record = restore ? life.careerRecords[occupation] : null;
-  life.occupationYears = record?.years ?? 0;
-  life.occupationRole = record?.role ?? occupation;
+  life.occupationYears = 0;
+  life.occupationRole = occupation;
   syncOccupationSkill(life);
   life.occupationRank = rankForSkill(life.occupationSkill);
   updatePromotionNote(life);
@@ -1601,8 +1600,10 @@ function availableFunds(life, payer) {
   return payer === PAYER.PARENTS ? life.parents?.gold ?? 0 : life.gold ?? 0;
 }
 
-const gold = (value) => `${Math.abs(value) < 10 ? Math.round(value * 10) / 10 : Math.round(value)}G`;
-const toGoldText = (text) => String(text).replace(/(-?[\d,]+(?:\.\d+)?)G/g, (_, amount) => gold(Number(amount.replaceAll(",", ""))));
+const goldFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+export const formatGold = (value) => `${goldFormatter.format(Number(value) || 0)}G`;
+const gold = formatGold;
+const asText = (text) => String(text);
 
 function insufficientFundsReason(life, cost, payer) {
   const funds = availableFunds(life, payer);
@@ -1906,6 +1907,18 @@ export const CHOICE_EVENTS = [
     ],
   },
   {
+    id: "choice-work-practice", title: "仕事の腕を磨く", category: "職業・昇進", weight: 0.7,
+    requirements: {
+      minAge: 13, cooldownYears: 3,
+      custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation) && !training(life),
+    },
+    copy: "仕事の取り組み方を見直す機会が訪れた。技能を磨くか、今の働き方を続けるか選べる。",
+    choices: [
+      { label: "職業技能を磨く", effect: "work-practice" },
+      { label: "今の仕事を続ける", effect: "steady" },
+    ],
+  },
+  {
     id: "choice-business-loan", title: "商人からの融資", category: "財産・借金", weight: 0.8,
     requirements: { minAge: 18, maximumGold: 18, custom: (life) => life.debt + 10 <= TUNING.ordinaryDebtLimit },
     copy: "商人が仕入れ資金を貸すと申し出た。借金をして商機をつかむか、堅実に働くか。",
@@ -2173,11 +2186,11 @@ function buildDecision(life, event, random) {
     .map((choice) => decorateChoice(life, choice))
     .map((choice) => ({
       ...choice,
-      label: toGoldText(choice.label),
-      preview: compactChoicePreview(choice.preview).map(toGoldText),
-      disabledReason: choice.disabledReason ? toGoldText(choice.disabledReason) : null,
+      label: asText(choice.label),
+      preview: compactChoicePreview(choice.preview).map(asText),
+      disabledReason: choice.disabledReason ? asText(choice.disabledReason) : null,
     }));
-  decision.copy = toGoldText(decision.copy);
+  decision.copy = asText(decision.copy);
   return decision;
 }
 
@@ -2281,8 +2294,8 @@ function decisionFor(life, random) {
       const decorated = decorateChoice(life, choice);
       return {
         ...decorated,
-        label: toGoldText(decorated.label),
-        preview: compactChoicePreview(decorated.preview).map(toGoldText),
+        label: asText(decorated.label),
+        preview: compactChoicePreview(decorated.preview).map(asText),
       };
     }),
   };
@@ -2462,6 +2475,12 @@ export function applyChoice(life, choice, random = Math.random) {
     case "career-change":
     case "career-graduate": {
       const [, job] = selected.effect.split(":");
+      const career = CAREER_CATALOG.find((item) => item.occupation === job);
+      if (!career || !careerQualified(life, career)
+        || (effectType !== "career-graduate" && job === life.occupation)) {
+        message = "必要な適性や技能を満たしていないため、その職業には就けなかった。";
+        break;
+      }
       const previousJob = life.occupation;
       const previousSalary = monthlyBudget(life).income.work;
       changeOccupation(life, job, effectType === "career-start" ? "本人が初めての仕事を選択"
@@ -2965,9 +2984,9 @@ export function applyChoice(life, choice, random = Math.random) {
   const detail = [...changes, ...notes];
   life.lastResult = {
     title: decision.title,
-    choice: toGoldText(selected.label),
-    message: toGoldText(message),
-    details: detail.map(toGoldText),
+    choice: asText(selected.label),
+    message: asText(message),
+    details: detail.map(asText),
     age: life.age,
   };
   if (changes.length) message = `${message}（${changes.join("、")}）`;
