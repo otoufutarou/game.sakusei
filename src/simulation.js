@@ -3178,7 +3178,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
     if (life.age >= life.nextDecisionAt) {
       life.pendingDecision = decisionFor(life, random);
       if (!life.pendingDecision) {
-        life.nextDecisionAt = life.age + rollExponential(TUNING.decisionMeanYears, random);
+        life.nextDecisionAt = life.age + Math.max(0.1, rollExponential(TUNING.decisionMeanYears, random));
         if (remaining <= 0) break;
         continue;
       }

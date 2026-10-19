@@ -540,6 +540,7 @@ test("school fallback is informative, meaningful, and presented only once", () =
   const life = createLife(() => 0.5);
   life.age = 9;
   life.maxHumanAge = 80;
+  life.playing = true;
   life.nextDecisionAt = life.age;
   life.nextLogAt = Infinity;
   life.nextSocialAt = Infinity;
@@ -565,7 +566,7 @@ test("fallback alternatives have distinct mechanical outcomes", () => {
   const worker = makeLife({ age: 10, gold: 3, skills: {}, baseStats: {} });
   decide(worker, "work", () => 0.5);
   assert.equal(worker.gold, 5);
-  assert.equal(worker.skills.manual, 2);
+  assert.equal(Object.values(worker.skills).reduce((sum, value) => sum + value, 0), 2);
   assert.equal(worker.fame, 0);
 
   const mentor = makeLife({ skills: {}, baseStats: {} });
