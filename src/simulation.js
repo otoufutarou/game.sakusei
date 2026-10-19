@@ -1597,8 +1597,8 @@ function insufficientFundsReason(life, cost, payer) {
   const funds = availableFunds(life, payer);
   if (cost <= funds) return null;
   return payer === PAYER.PARENTS
-    ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(funds))}）`
-    : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(funds))}）`;
+    ? `親の財産が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`
+    : `所持金が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`;
 }
 
 function businessChance(life, size) {
@@ -3084,7 +3084,7 @@ function die(life, cause) {
   life.deathAge = life.age;
   const heirs = settleInheritance(life);
   const detail = heirs.length
-    ? ` 相続財産${silver(life.inheritanceEstate)}を${heirs.map((heir) => `${heir.name}へ${silver(heir.amount)}`).join("、")}分けた。`
+    ? ` 相続財産${gold(life.inheritanceEstate)}を${heirs.map((heir) => `${heir.name}へ${gold(heir.amount)}`).join("、")}分けた。`
     : ` 借金を清算した後の財産は${life.inheritanceTo}へ帰属した。`;
   const titleDetail = life.titleSuccession
     ? life.titleSuccession.heirName
