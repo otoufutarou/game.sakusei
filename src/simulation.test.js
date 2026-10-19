@@ -778,7 +778,78 @@ test("death settles the estate to living spouse and children without passing deb
   assert.equal(life.inheritanceEstate, 60);
   assert.equal(life.inheritance.reduce((sum, heir) => sum + heir.amount, 0), 60);
   assert.deepEqual(life.inheritance.map((heir) => Math.round(heir.amount)), [20, 20, 10, 10]);
-  assert.match(life.journal.at(-1).text, /相続財産60\.0G/);
+  assert.match(life.journal.at(-1).text, /相続財産1800銀貨/);
+});
+
+test("legacy balances are preserved and displayed on a silver-denominated 30:1 scale", () => {
+  const legacy = migrateLife({ name: "旧データ", race: "human", nation: "kingdom", age: 20, gold: 5, debt: 2 });
+  assert.equal(legacy.gold, 5);
+  assert.equal(legacy.debt, 2);
+  assert.equal(legacy.currencySchema, "legacy-G-v1");
+  assert.equal(TUNING.currency.silverPerLegacyG, 30);
+});
+
+test("housing purchases and resale preserve a separately valued estate asset", () => {
+  const { life } = adultLife(30, { gold: 250 });
+  decide(life, "buy-home-small", () => 0);
+  assert.equal(life.ownsHome, true);
+  assert.equal(life.homeValue, TUNING.homePricesLegacyG.small);
+  assert.equal(life.gold, 130);
+  decide(life, "sell-home", () => 0);
+  assert.equal(life.ownsHome, false);
+  assert.equal(life.homeValue, 0);
+  assert.equal(life.gold, 214);
+});
+
+test("eligible low-income academy applicants receive an interest-free repayable scholarship", () => {
+  const { life } = adultLife(31, {
+    age: 15, gold: 0, status: { name: "都市平民" }, mana: 60,
+    skills: { magic: 0 }, skillTalents: { magic: "普通" },
+  });
+  decide(life, "academy-magic", () => 0.5);
+  assert.equal(life.scholarshipBalance, 60 + 6 * TUNING.scholarshipLivingCostLegacyG);
+  assert.equal(life.debt, 0, "education loans are tracked separately from ordinary debt");
+  life.age = 30;
+  life.occupation = "教師";
+  assert.ok(monthlyBudget(life).scholarshipRepayment > 0);
+  life.occupation = "引退";
+  assert.equal(monthlyBudget(life).scholarshipRepayment, 0, "no repayments are due when living costs cannot be covered");
+});
+
+test("a will changes estate beneficiaries but never transfers the peerage to the spouse", () => {
+  const { life } = adultLife(32, { age: 60, gold: 90, peerageTitle: "伯爵家" });
+  const spouse = { id: "spouse", name: "配偶者", race: "human", humanAge: 60, alive: true, relationship: "配偶者", wealth: 0 };
+  const child = { id: "child", name: "長子", race: "human", humanAge: 35, alive: true, relationship: "子", wealth: 0 };
+  life.npcs = [spouse, child];
+  life.spouseId = spouse.id;
+  life.children = [child.id];
+  decide(life, "will-charity:教会", () => 0);
+  life.maxHumanAge = 60;
+  advanceLife(life, 0.25, () => 0.9);
+  assert.equal(life.inheritanceTo, "教会");
+  assert.equal(life.inheritance.length, 0);
+  assert.equal(life.titleSuccession.heirId, child.id);
+  assert.equal(child.peerageTitle, "伯爵家");
+  assert.equal(spouse.peerageTitle, undefined);
+});
+
+test("business expansion uses the configured base rates and caps the count of investments", () => {
+  assert.deepEqual(TUNING.business.small.chance, 0.6);
+  assert.deepEqual(TUNING.business.medium.chance, 0.45);
+  assert.deepEqual(TUNING.business.large.chance, 0.3);
+  const { life } = adultLife(33, { occupation: "商人", gold: 80, skills: { trade: 50 } });
+  decide(life, "business-expand:small", () => 0);
+  assert.equal(life.businessRevenue, TUNING.business.small.revenue);
+  assert.equal(life.businessExpansionCount, 1);
+  assert.ok(monthlyBudget(life).income.work > 0);
+});
+
+test("job offers gate qualification separately from the fixed I-V acceptance rates", () => {
+  assert.deepEqual(TUNING.jobAcceptanceRates, [0.95, 0.8, 0.6, 0.25, 0.05]);
+  const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-offer");
+  const life = makeLife({ skills: { literacy: 0, trade: 0, scholarship: 0, magic: 0 }, mana: 0 });
+  const choices = event.choicesFor(life);
+  assert.deepEqual(choices.map((choice) => choice.effect), ["job-application:1:農作業", "steady"]);
 });
 
 test("widowhood, divorce, and remarriage keep state consistent", () => {

@@ -55,6 +55,12 @@ function missingDefaults(life) {
     inheritance: [],
     inheritanceEstate: 0,
     debtSettledAtDeath: 0,
+    scholarshipBalance: 0,
+    homeType: null,
+    homeValue: 0,
+    will: { type: "legal", targetId: null, charity: null },
+    peerageTitle: null,
+    titleSuccession: null,
   };
 }
 
@@ -105,6 +111,13 @@ export function migrateLife(data) {
   if (life.pendingDecision) life.pendingDecision = null;
   life.playing = false;
   life.saveVersion = SAVE_VERSION;
+  life.currencySchema ??= "legacy-G-v1";
+  if (life.ownsHome && !life.homeType) {
+    life.homeType = "small";
+    life.homeValue = 40;
+  }
+  if (life.ownsHome && !life.homeValue) life.homeValue = 40;
+  life.will ??= { type: "legal", targetId: null, charity: null };
   return life;
 }
 
