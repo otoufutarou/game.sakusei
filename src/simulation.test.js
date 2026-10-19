@@ -1112,7 +1112,10 @@ test("job offers show explicit career destinations with salary and skill require
   assert.ok(choices.slice(0, 2).every((choice) => choice.preview.length === 2
     && choice.preview[0].startsWith("月給:") && choice.preview[1].startsWith("必要技能:")));
   const unemployed = makeLife({ age: 16, occupation: "失業中", skills: { manual: 0, farming: 0, craft: 0 } });
+  unemployed.eventHistory.push({ id: event.id, age: 14 });
   assert.equal(isRoutineEventEligible(unemployed, event), true, "unemployed teenagers can receive explicit job options");
+  unemployed.age = 15;
+  assert.equal(isRoutineEventEligible(unemployed, event), false, "an unemployed character waits two years between offers");
 });
 
 test("widowhood, divorce, and remarriage keep state consistent", () => {

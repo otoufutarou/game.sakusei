@@ -306,7 +306,9 @@ export function isRoutineEventEligible(life, event, age = life.age) {
   if (requirements.oncePerLife && history.some((entry) => entry.id === event.id)) return false;
   if ((life.journal ?? []).slice(-20).some((entry) => entry.id === event.id)) return false;
   const lastOccurrence = [...history].reverse().find((entry) => entry.id === event.id);
-  if (lastOccurrence && age - lastOccurrence.age < (requirements.cooldownYears ?? 0)) return false;
+  const cooldownYears = typeof requirements.cooldownYears === "function"
+    ? requirements.cooldownYears(life) : requirements.cooldownYears ?? 0;
+  if (lastOccurrence && age - lastOccurrence.age < cooldownYears) return false;
   return true;
 }
 
@@ -894,7 +896,7 @@ function applyWorldOnset(life, situation, random) {
     if (life.occupation === "兵士") {
       impacts.push("兵士として戦地へ送られる危険が高まった");
     } else if (life.age >= 18 && life.age < 45) {
-      impacts.push("徴兵の可能性が高まり、守備隊から協力を求められている");
+      impacts.push("若い住民にも守備隊への協力が呼びかけられている");
     }
     if (life.occupation === "商人") impacts.push("軍需で商人の取引が増えた");
     if (life.occupation === "冒険者") impacts.push("護衛や討伐の依頼が増えた");
@@ -904,7 +906,7 @@ function applyWorldOnset(life, situation, random) {
   } else if (situation === "飢饉") {
     impacts.push("生活費が大きく増えた");
   } else if (situation === "不況") {
-    if (life.age >= 13) impacts.push("求人が減り、収入が下がるおそれがある");
+    if (life.age >= 13) impacts.push("不況で仕事の賃金が下がっている");
   } else if (situation === "魔物の襲撃") {
     if (life.occupation === "冒険者") impacts.push("討伐の依頼が増えた");
     if (["辺境", "農村"].includes(life.home)) {
@@ -1528,10 +1530,10 @@ function finishTraining(life, random, { early = false, silent = false } = {}) {
     life.graduationSkill = plan.skill;
     life.nextDecisionAt = life.age;
     text = `${plan.name}を修了した。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。進路を選ぼう。`;
-  } else if (early) {
-    text = `${plan.name}は途中で終わった。今後の進路は自分で決める。`;
   } else {
-    text = early ? `${plan.name}は途中で終わった。` : `${plan.name}を修了した。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。`;
+    text = early
+      ? `${plan.name}は途中で終わった。今後の進路は自分で決める。`
+      : `${plan.name}を修了した。習得した${skillName(plan.skill)}技能は${Math.round(life.skills[plan.skill] ?? 0)}。`;
   }
   if (!silent) appendEvent(life, text, "life", "教育", `edu-finish-${plan.kind}-${Math.floor(life.age)}`);
 }
@@ -1599,7 +1601,7 @@ function availableFunds(life, payer) {
   return payer === PAYER.PARENTS ? life.parents?.gold ?? 0 : life.gold ?? 0;
 }
 
-const gold = (value) => `${Math.round(value)}G`;
+const gold = (value) => `${Math.abs(value) < 10 ? Math.round(value * 10) / 10 : Math.round(value)}G`;
 const toGoldText = (text) => String(text).replace(/(-?[\d,]+(?:\.\d+)?)G/g, (_, amount) => gold(Number(amount.replaceAll(",", ""))));
 
 function insufficientFundsReason(life, cost, payer) {
@@ -1894,7 +1896,7 @@ export const CHOICE_EVENTS = [
   {
     id: "choice-work-offer", title: "遠方からの仕事の誘い", category: "職業・昇進", weight: 1,
     requirements: {
-      minAge: 14, cooldownYears: 8,
+      minAge: 14, cooldownYears: (life) => life.occupation === "失業中" ? 2 : 8,
       custom: (life) => (life.age >= 20 || life.occupation === "失業中") && availableCareerOptions(life).length > 0,
     },
     copy: "別の町から求人が届いた。必要技能と月給を確認して、今の仕事から移るか選べる。",
