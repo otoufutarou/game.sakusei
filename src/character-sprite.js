@@ -67,7 +67,7 @@ export function spriteSpec(person, { isHero = false } = {}) {
 }
 
 // Returns pixel rectangles on the logical grid, origin at the top-left, feet on the last row.
-export function buildSprite(spec, frame = 0, walking = false) {
+export function buildSprite(spec) {
   const shape = STAGE_SHAPE[spec.stage];
   const rects = [];
   const add = (x, y, w, h, color) => rects.push({ x, y, w, h, color });
@@ -96,13 +96,11 @@ export function buildSprite(spec, frame = 0, walking = false) {
   }
   if (["beastkin", "demon", "dragon"].includes(spec.raceId)) add(left + bodyW, legY - 2, 3, 2, spec.raceId === "beastkin" ? spec.hair : skin);
 
-  const stepA = walking && frame % 2 === 0 ? 1 : 0;
-  const stepB = walking && frame % 2 === 1 ? 1 : 0;
   const legW = Math.max(2, Math.floor(bodyW / 2) - 1);
-  add(left + 1 - stepA, legY, legW, legH, "#544334");
-  add(left + bodyW - 1 - legW + stepB, legY, legW, legH, "#544334");
-  add(left + 1 - stepA - 1, legY + legH - 1, legW + 1, 1, dark);
-  add(left + bodyW - 1 - legW + stepB, legY + legH - 1, legW + 1, 1, dark);
+  add(left + 1, legY, legW, legH, "#544334");
+  add(left + bodyW - 1 - legW, legY, legW, legH, "#544334");
+  add(left, legY + legH - 1, legW + 1, 1, dark);
+  add(left + bodyW - legW, legY + legH - 1, legW + 1, 1, dark);
 
   add(left, bodyY, bodyW, bodyH, coat);
   if (spec.stage !== "baby") add(left + Math.floor(bodyW / 2) - 1, bodyY, 2, bodyH, trim);
@@ -186,8 +184,8 @@ export function buildSprite(spec, frame = 0, walking = false) {
   return { rects, shape };
 }
 
-function drawPerson(context, spec, x, ground, scale, { walking = false, frame = 0 } = {}) {
-  const { rects } = buildSprite(spec, frame, walking);
+function drawPerson(context, spec, x, ground, scale) {
+  const { rects } = buildSprite(spec);
   const left = Math.round(x - 10 * scale);
   const top = Math.round(ground - 34 * scale);
   context.imageSmoothingEnabled = false;
@@ -211,61 +209,151 @@ export function agePositionPercent(age) {
   return 98;
 }
 
-function drawLandscape(context, width, height, life) {
-  const palettes = {
-    kingdom: ["#d9e7e3", "#829a79", "#afaa75"],
-    empire: ["#eadbb8", "#c59b57", "#9b8153"],
-    forest: ["#d7e4d0", "#79946a", "#5e7b62"],
-    mountain: ["#d9e0e2", "#9c9e96", "#72766f"],
-    "demon-realm": ["#d6cbd8", "#786b85", "#55485f"],
-  };
-  const colors = palettes[life.race.id === "dragon" ? "demon-realm" : life.nation.id] ?? palettes.kingdom;
-  const sky = context.createLinearGradient(0, 0, 0, height);
-  sky.addColorStop(0, colors[0]);
-  sky.addColorStop(0.68, "#f4e8c8");
-  sky.addColorStop(1, colors[1]);
-  context.fillStyle = sky;
-  context.fillRect(0, 0, width, height);
-  context.fillStyle = colors[2];
-  context.fillRect(0, height - 21, width, 21);
-  context.fillStyle = "#927c54";
-  context.fillRect(0, height - 17, width, 4);
-  context.fillStyle = "#d8c49c";
-  context.fillRect(0, height - 13, width, 3);
+const LANDSCAPE_PALETTES = {
+  kingdom: { sky: "#b9d8d2", far: "#7a9b7b", ground: "#80985c", path: "#c5a56e", wall: "#a9a28c", roof: "#795344", trim: "#ead79c", leaf: "#54754c" },
+  empire: { sky: "#d5c49c", far: "#897b68", ground: "#9b895f", path: "#b69a68", wall: "#877f73", roof: "#574a43", trim: "#cfb777", leaf: "#69734d" },
+  forest: { sky: "#b8d3b8", far: "#547451", ground: "#718f5d", path: "#a99869", wall: "#987f5e", roof: "#526b4e", trim: "#dcc991", leaf: "#416443" },
+  mountain: { sky: "#c1d1d1", far: "#777f7b", ground: "#85856f", path: "#b5a47b", wall: "#888a85", roof: "#5d5c59", trim: "#d5bd82", leaf: "#657858" },
+  "demon-realm": { sky: "#b9a9c5", far: "#62566e", ground: "#70647a", path: "#a18483", wall: "#786b83", roof: "#443c55", trim: "#dfbd73", leaf: "#596d68" },
+};
 
-  if (life.race.id === "dragon" || life.nation.id === "mountain") {
-    context.fillStyle = colors[1];
-    context.beginPath();
-    context.moveTo(width * 0.56, height - 20);
-    context.lineTo(width * 0.7, height * 0.13);
-    context.lineTo(width * 0.84, height - 20);
-    context.fill();
-    context.beginPath();
-    context.moveTo(width * 0.75, height - 20);
-    context.lineTo(width * 0.91, height * 0.25);
-    context.lineTo(width, height - 20);
-    context.fill();
-  } else if (life.nation.id === "forest") {
-    for (const x of [width * 0.14, width * 0.25, width * 0.81, width * 0.91]) {
-      context.fillStyle = "#5d7659";
-      context.fillRect(x, height * 0.36, 5, height * 0.43);
-      context.fillStyle = "#708d67";
-      context.fillRect(x - 10, height * 0.22, 25, height * 0.3);
+function block(context, x, y, width, height, color, sx, sy) {
+  context.fillStyle = color;
+  context.fillRect(Math.round(x * sx), Math.round(y * sy), Math.max(1, Math.round(width * sx)), Math.max(1, Math.round(height * sy)));
+}
+
+function drawTree(context, x, ground, size, palette, sx, sy) {
+  block(context, x + size * 0.42, ground - size * 0.52, size * 0.16, size * 0.52, "#604b35", sx, sy);
+  for (let row = 0; row < 4; row += 1) {
+    const span = size * (0.72 - row * 0.13);
+    block(context, x + (size - span) / 2, ground - size * (0.5 + row * 0.12), span, size * 0.15, row % 2 ? palette.leaf : palette.far, sx, sy);
+  }
+}
+
+function drawLandscape(context, width, height, life) {
+  const sx = width / 400;
+  const sy = height / 150;
+  const nationId = life.nation?.id ?? "kingdom";
+  const palette = LANDSCAPE_PALETTES[nationId] ?? LANDSCAPE_PALETTES.kingdom;
+  const ground = 130;
+  block(context, 0, 0, 400, 150, palette.sky, sx, sy);
+  block(context, 22, 20, 22, 5, "#e9e7d2", sx, sy);
+  block(context, 30, 16, 14, 4, "#e9e7d2", sx, sy);
+  block(context, 250, 29, 30, 5, "#e9e7d2", sx, sy);
+  block(context, 261, 25, 19, 4, "#e9e7d2", sx, sy);
+
+  if (nationId === "mountain") {
+    for (const [x, top, span] of [[188, 30, 90], [254, 17, 110], [319, 37, 76]]) {
+      for (let row = 0; row < 8; row += 1) {
+        const rowWidth = span - Math.abs(4 - row) * 13;
+        block(context, x + (span - rowWidth) / 2, top + row * 7, rowWidth, 8, row % 2 ? palette.far : "#909791", sx, sy);
+      }
+      block(context, x + span * 0.48, top + 8, span * 0.18, 7, "#e5e2d3", sx, sy);
+    }
+  } else if (nationId === "forest") {
+    for (const [x, size] of [[12, 55], [95, 40], [282, 48], [348, 63]]) drawTree(context, x, ground, size, palette, sx, sy);
+  } else if (nationId === "empire") {
+    block(context, 0, 75, 400, 10, palette.far, sx, sy);
+    for (const x of [18, 92, 184, 310, 364]) {
+      block(context, x, 54, 20, 35, palette.wall, sx, sy);
+      block(context, x - 3, 51, 26, 5, palette.roof, sx, sy);
+      for (let crenel = 0; crenel < 3; crenel += 1) block(context, x + crenel * 9, 47, 5, 6, palette.wall, sx, sy);
+    }
+  } else if (nationId === "demon-realm") {
+    for (const [x, top, span] of [[24, 51, 57], [99, 38, 72], [288, 44, 64], [349, 58, 42]]) {
+      block(context, x, top + 11, span, ground - top - 11, palette.far, sx, sy);
+      for (let row = 0; row < 4; row += 1) block(context, x + row * 5, top + row * 8, span - row * 10, 9, row % 2 ? "#786981" : palette.far, sx, sy);
+      block(context, x + span * 0.55, top + 18, 4, 9, "#d9a9df", sx, sy);
     }
   } else {
-    context.fillStyle = "#a88656";
-    context.fillRect(width * 0.77, height * 0.48, 32, height * 0.3);
-    context.fillStyle = "#765943";
-    context.fillRect(width * 0.75, height * 0.4, 36, 8);
-    context.fillStyle = "#f5e8cb";
-    context.fillRect(width * 0.79, height * 0.57, 5, 8);
+    block(context, 0, 83, 400, 10, palette.far, sx, sy);
+    for (const x of [28, 104, 276, 342]) {
+      block(context, x, 70, 37, 18, palette.far, sx, sy);
+      block(context, x - 4, 66, 45, 5, palette.far, sx, sy);
+    }
   }
-  context.fillStyle = "#8f774d";
-  context.fillRect(width * 0.04, height - 27, width * 0.92, 2);
-  for (let index = 0; index < 7; index += 1) {
-    const markerX = width * (0.05 + index * 0.15);
-    context.fillStyle = "#fffaf0";
-    context.fillRect(markerX, height - 31, 2, 8);
+
+  block(context, 0, ground - 2, 400, 22, palette.ground, sx, sy);
+  block(context, 0, ground + 5, 400, 4, palette.leaf, sx, sy);
+  block(context, 0, ground + 11, 400, 4, palette.path, sx, sy);
+  block(context, 0, ground + 15, 400, 4, "#927c54", sx, sy);
+  for (const x of [20, 74, 128, 182, 236, 290, 344, 386]) {
+    block(context, x, ground - 5, 3, 3, "#e6d99b", sx, sy);
+    block(context, x + 5, ground - 1, 2, 2, "#536d47", sx, sy);
+  }
+  return { sx, sy, ground, palette };
+}
+
+function drawHome(context, life, palette, sx, sy) {
+  const homeSizes = life.ownsHome
+    ? { small: [57, 36], large: [72, 43], estate: [90, 52] }[life.homeType] ?? [57, 36]
+    : [47, 31];
+  const [houseWidth, houseHeight] = homeSizes;
+  const x = 400 - houseWidth - 17;
+  const ground = 130;
+  const y = ground - houseHeight;
+  const forest = life.nation?.id === "forest";
+  if (forest) {
+    block(context, x + 5, ground - 47, 7, 47, "#684b37", sx, sy);
+    block(context, x + houseWidth - 14, ground - 47, 7, 47, "#684b37", sx, sy);
+    block(context, x - 7, y + 10, houseWidth + 14, 5, "#71583d", sx, sy);
+    block(context, x - 8, y + 4, houseWidth + 16, 7, palette.roof, sx, sy);
+    block(context, x + 2, y + 11, houseWidth - 4, houseHeight - 11, palette.wall, sx, sy);
+  } else {
+    block(context, x + 2, y + 14, houseWidth - 4, houseHeight - 14, palette.wall, sx, sy);
+    block(context, x - 4, y + 11, houseWidth + 8, 5, palette.roof, sx, sy);
+    block(context, x + 4, y + 6, houseWidth - 8, 6, palette.roof, sx, sy);
+    block(context, x + 12, y + 1, houseWidth - 24, 6, palette.roof, sx, sy);
+    if (life.nation?.id === "empire") {
+      for (let notch = 0; notch < 4; notch += 1) block(context, x + 5 + notch * (houseWidth - 10) / 4, y + 7, 4, 6, palette.wall, sx, sy);
+    }
+  }
+  block(context, x + houseWidth * 0.43, ground - 19, houseWidth * 0.17, 19, "#554235", sx, sy);
+  for (const windowX of [x + 8, x + houseWidth - 16]) {
+    block(context, windowX, y + 21, 8, 8, palette.trim, sx, sy);
+    block(context, windowX + 3, y + 21, 2, 8, palette.roof, sx, sy);
+    block(context, windowX, y + 24, 8, 2, palette.roof, sx, sy);
+  }
+  block(context, x + houseWidth * 0.45, ground - 3, houseWidth * 0.14, 3, "#927c54", sx, sy);
+  if (life.ownsHome) {
+    block(context, x - 3, ground - 3, 4, 3, "#62824d", sx, sy);
+    block(context, x + houseWidth, ground - 4, 5, 4, "#62824d", sx, sy);
+  }
+}
+
+function drawWorksite(context, life, palette, sx, sy) {
+  const occupation = life.occupation ?? "";
+  if (/農|家業/.test(occupation)) {
+    block(context, 22, 110, 62, 3, "#826342", sx, sy);
+    for (const x of [28, 43, 58, 73]) {
+      block(context, x, 103, 3, 7, palette.leaf, sx, sy);
+      block(context, x - 2, 101, 7, 3, "#a8aa59", sx, sy);
+    }
+  } else if (/商人/.test(occupation)) {
+    block(context, 25, 93, 48, 4, "#74513b", sx, sy);
+    block(context, 30, 97, 3, 16, "#614b39", sx, sy);
+    block(context, 66, 97, 3, 16, "#614b39", sx, sy);
+    block(context, 21, 86, 56, 8, "#a35345", sx, sy);
+    block(context, 21, 94, 56, 3, palette.trim, sx, sy);
+  } else if (/鍛冶|職人|工房/.test(occupation)) {
+    block(context, 27, 93, 49, 20, "#776553", sx, sy);
+    block(context, 23, 88, 57, 6, palette.roof, sx, sy);
+    block(context, 62, 73, 8, 17, palette.wall, sx, sy);
+    block(context, 65, 68, 4, 5, "#898a85", sx, sy);
+    block(context, 38, 101, 10, 6, "#bd7040", sx, sy);
+    block(context, 41, 102, 4, 4, "#f0bd5e", sx, sy);
+  } else if (/騎士|兵士/.test(occupation)) {
+    block(context, 28, 83, 48, 30, palette.wall, sx, sy);
+    block(context, 23, 78, 58, 6, palette.roof, sx, sy);
+    block(context, 46, 96, 12, 17, "#56493f", sx, sy);
+    block(context, 36, 90, 4, 9, palette.trim, sx, sy);
+    block(context, 64, 90, 4, 9, palette.trim, sx, sy);
+  } else if (/学|教師|魔術/.test(occupation)) {
+    block(context, 30, 82, 50, 31, palette.wall, sx, sy);
+    block(context, 25, 77, 60, 6, palette.roof, sx, sy);
+    block(context, 47, 67, 15, 12, palette.wall, sx, sy);
+    block(context, 45, 64, 19, 4, palette.trim, sx, sy);
+    block(context, 49, 91, 12, 22, "#594d45", sx, sy);
   }
 }
 
@@ -279,37 +367,43 @@ export function livingFamily(life) {
   return { spouse: spouse ?? spouseFallback, children };
 }
 
-export function drawJourney(context, sprite, { life, frame = 0 } = {}) {
+export function drawJourney(context, sprite, { life } = {}) {
   if (!context || !life) return;
   const { width, height } = context.canvas;
   context.clearRect(0, 0, width, height);
-  drawLandscape(context, width, height, life);
+  const { sx, sy, ground, palette } = drawLandscape(context, width, height, life);
+  drawWorksite(context, life, palette, sx, sy);
+  drawHome(context, life, palette, sx, sy);
   const age = life.age ?? 0;
-  const x = width * agePositionPercent(age) / 100;
-  const ground = height - 14;
-  const scale = Math.max(1, Math.min(3, Math.floor((height - 24) / 36)));
-  const walking = Boolean(life.playing) && life.active !== false;
-  if (life.active !== false) {
-    drawPerson(context, buildHeroSpec(life), x, ground, scale, { walking, frame });
+  const x = Math.max(48, Math.min(width - 48, width * agePositionPercent(age) / 100));
+  const baseline = height * (ground + 5) / 150;
+  const scale = Math.max(1, Math.min(2, Math.floor(height / 70)));
+  const household = [];
+  if (age < 12 && life.active !== false && life.parents) {
+    household.push(
+      { name: `guardian-${life.name}-father`, age: 36, gender: "男性", occupation: life.parents.father, race: life.race?.id },
+      { name: `guardian-${life.name}-mother`, age: 34, gender: "女性", occupation: life.parents.mother, race: life.race?.id },
+    );
+  } else {
+    const { spouse, children } = livingFamily(life);
+    if (spouse) household.push({ ...spouse, race: spouse.race ?? life.race?.id });
+    household.push(...children.map((child) => ({ ...child, race: child.race ?? life.race?.id, name: child.name ?? String(child.id) })));
   }
-  const { spouse, children } = livingFamily(life);
-  const spacing = 13 * scale;
-  let cursor = x + spacing;
-  if (spouse && life.active !== false) {
-    drawPerson(context, spriteSpec({ ...spouse, race: spouse.race ?? life.race?.id }), Math.min(cursor, width - 12 * scale), ground, scale, { walking, frame: frame + 1 });
-    cursor += spacing;
-  }
-  const slots = Math.max(0, Math.floor((width - 12 * scale - cursor) / (9 * scale)) + 1);
-  const shown = life.active === false ? [] : children.slice(0, Math.min(slots, 5));
-  shown.forEach((child, index) => {
-    const childScale = Math.max(1, scale - 1);
-    drawPerson(context, spriteSpec({ ...child, race: child.race ?? life.race?.id, name: child.name ?? String(child.id) }), cursor + index * 9 * scale, ground, childScale, { walking, frame: frame + index });
+  const shown = life.active === false ? [] : household.slice(0, 4);
+  shown.forEach((person, index) => {
+    const side = index % 2 === 0 ? -1 : 1;
+    const distance = 20 + Math.floor(index / 2) * 19;
+    const personX = Math.max(11, Math.min(width - 11, x + side * distance));
+    drawPerson(context, spriteSpec(person), personX, baseline, 1);
   });
-  const hidden = children.length - shown.length;
+  if (life.active !== false) {
+    drawPerson(context, buildHeroSpec(life), x, baseline, scale);
+  }
+  const hidden = life.active === false ? 0 : Math.max(0, household.length - shown.length);
   if (hidden > 0 && context.fillText) {
     context.fillStyle = "#4a3a2c";
     context.font = "bold 12px sans-serif";
-    context.fillText(`+${hidden}`, Math.min(width - 24, cursor + shown.length * 9 * scale), ground - 4);
+    context.fillText(`+${hidden}`, Math.max(5, Math.min(width - 25, x + 42)), baseline - 4);
   }
 }
 
