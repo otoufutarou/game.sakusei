@@ -217,7 +217,9 @@ function updateLifeDisplay() {
   elements.sceneCaption.textContent = life.race.id === "dragon" ? "山の巣のそば" : `${life.nation.name}・${life.home}`;
   elements.canvas.parentElement.dataset.region = life.race.id === "dragon" ? "dragon" : life.nation.id;
   elements.gold.textContent = `${Math.floor(life.gold)}G${life.debt > 0.5 ? `（借${Math.floor(life.debt)}）` : ""}`;
-  elements.health.textContent = life.health;
+  elements.health.textContent = life.illness
+    ? `${life.illness.name}・${life.illness.severity}`
+    : life.health;
   elements.people.textContent = familySummary();
 }
 
@@ -389,7 +391,11 @@ function showEnding() {
     ["人間換算", `${Math.floor(life.deathAge)}年`],
     ["最期", life.deathCause],
     ["最後の仕事", occupationTitle(life)],
-    ["財産", money(life.gold)],
+    ["死亡時の財産", money(life.inheritanceEstate ?? life.gold)],
+    ["相続", life.inheritance?.length
+      ? life.inheritance.map((heir) => `${heir.name} ${money(heir.amount)}`).join("、")
+      : life.inheritanceTo ?? "相続先なし"],
+    ["清算した借金", money(life.debtSettledAtDeath ?? 0)],
     ["子供", `${(life.npcs ?? []).filter((npc) => npc.relationship === "子").length}人`],
     ["人生の記録", `${life.eventCount} 件`],
   ]);

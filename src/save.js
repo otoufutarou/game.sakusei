@@ -31,6 +31,12 @@ function missingDefaults(life) {
     childPlan: "unset",
     nextChildAskAt: (life.age ?? 0) + 1,
     pregnancy: null,
+    tryingSince: null,
+    tryingUntil: null,
+    tryingMotherAge: null,
+    illness: null,
+    lastIllnessRecoveryAt: null,
+    sequelae: [],
     marriage: null,
     spouseId: null,
     romanticPartnerId: null,
@@ -44,6 +50,11 @@ function missingDefaults(life) {
     eventHistory: [],
     journal: [],
     children: [],
+    financialHardship: false,
+    inheritanceSettled: false,
+    inheritance: [],
+    inheritanceEstate: 0,
+    debtSettledAtDeath: 0,
   };
 }
 
@@ -77,6 +88,14 @@ export function migrateLife(data) {
   if (Array.isArray(life.children) && life.children.some((child) => typeof child === "string")) {
     life.legacyChildren = life.children.filter((child) => typeof child === "string");
     life.children = life.children.filter((child) => typeof child !== "string");
+  }
+  if (life.childPlan === "wants" && life.tryingUntil == null) {
+    const spouse = Array.isArray(life.npcs) ? life.npcs.find((npc) => npc.id === life.spouseId && npc.alive) : null;
+    life.tryingSince ??= life.age;
+    life.tryingUntil = life.age + 1;
+    life.tryingMotherAge ??= life.gender === "女性"
+      ? life.age
+      : spouse?.gender === "女性" ? spouse.humanAge : null;
   }
   life.nextLogAt ??= life.age + 1;
   life.nextDecisionAt ??= life.age + 2;
