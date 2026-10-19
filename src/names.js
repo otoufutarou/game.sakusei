@@ -1,7 +1,7 @@
-export const NAME_CULTURES = [
+const REGIONAL_NAME_DATA = [
   {
     id: "british",
-    male: ["アーサー", "アルバート", "アレクサンダー", "アンドリュー", "アンソニー", "ウィリアム", "エドガー", "エドワード", "エドマンド", "エドワード", "エリオット", "オリバー", "ガウェイン", "ギルバート", "グレゴリー", "ケネス", "ジェームズ", "ジェフリー", "ジョージ", "ジョン", "スティーブン", "セドリック", "チャールズ", "トマス", "ナサニエル", "ニコラス", "ハロルド", "ヒュー", "フィリップ", "フランシス", "フレデリック", "ベネディクト", "ヘンリー", "マイルズ", "マイケル", "マシュー", "モーリス", "ラルフ", "リチャード", "ロバート"],
+    male: ["アーサー", "アルバート", "アレクサンダー", "アンドリュー", "アンソニー", "ウィリアム", "エドガー", "エドワード", "エドマンド", "エリオット", "オリバー", "ガウェイン", "ギルバート", "グレゴリー", "ケネス", "ジェームズ", "ジェフリー", "ジョージ", "ジョン", "スティーブン", "セドリック", "チャールズ", "トマス", "ナサニエル", "ニコラス", "ハロルド", "ヒュー", "フィリップ", "フランシス", "フレデリック", "ベネディクト", "ヘンリー", "マイルズ", "マイケル", "マシュー", "モーリス", "ラルフ", "リチャード", "ロバート", "パーシヴァル"],
     female: ["アグネス", "アデレード", "アリス", "アン", "アンジェラ", "イーディス", "イザベル", "イレーネ", "エイダ", "エリザベス", "エレノア", "オードリー", "キャサリン", "グレース", "グウェンドリン", "ジェーン", "ジョアン", "スーザン", "セシリー", "ソフィア", "ダイアナ", "ドロシー", "ナンシー", "バーバラ", "フローレンス", "ベアトリス", "ヘレン", "マーガレット", "メアリー", "モード", "モリー", "ラヴィニア", "リディア", "ルーシー", "ローズ", "ロザムンド", "エマ", "クララ", "マチルダ", "ヴィクトリア"],
     surnames: ["アシュフォード", "アトウッド", "アボット", "アンダーソン", "ウィンザー", "ウッド", "エヴァンス", "エリス", "オークリー", "カーター", "クラーク", "グレイ", "グリーン", "コリンズ", "サットン", "スミス", "テイラー", "ハリス", "ブラウン", "ベネット", "ミラー", "モリス", "ライト", "リード", "ロバーツ"],
   },
@@ -25,7 +25,7 @@ export const NAME_CULTURES = [
   },
   {
     id: "spanish",
-    male: ["アグスティン", "アルフォンソ", "アルバロ", "アレハンドロ", "アントニオ", "アンドレス", "イグナシオ", "エステバン", "エミリオ", "エンリケ", "オスカル", "カルロス", "ガブリエル", "ガルシア", "クリストバル", "サンティアゴ", "シモン", "ディエゴ", "ティエゴ", "トマス", "ニコラス", "パブロ", "ハビエル", "フェリペ", "フェルナンド", "フランシスコ", "ホセ", "ホアキン", "マヌエル", "ミゲル", "ラファエル", "ラモン", "ルイス", "レオナルド", "ロドリゴ", "ロレンソ", "バレンティン", "ビセンテ", "マルティン", "マテオ"],
+    male: ["アグスティン", "アルフォンソ", "アルバロ", "アレハンドロ", "アントニオ", "アンドレス", "イグナシオ", "エステバン", "エミリオ", "エンリケ", "オスカル", "カルロス", "ガブリエル", "ガスパル", "クリストバル", "サンティアゴ", "シモン", "ディエゴ", "ティエゴ", "トマス", "ニコラス", "パブロ", "ハビエル", "フェリペ", "フェルナンド", "フランシスコ", "ホセ", "ホアキン", "マヌエル", "ミゲル", "ラファエル", "ラモン", "ルイス", "レオナルド", "ロドリゴ", "ロレンソ", "バレンティン", "ビセンテ", "マルティン", "マテオ"],
     female: ["アグネス", "アナ", "アントニア", "イサベル", "イネス", "エステル", "エレナ", "エレオノール", "エンカルナシオン", "カルメン", "カタリナ", "クララ", "コンスエロ", "サラ", "シルビア", "ソフィア", "テレサ", "ドロレス", "ナタリア", "ニエベス", "パウラ", "パロマ", "フアナ", "フランシスカ", "ベアトリス", "マリア", "マルガリータ", "マルタ", "メルセデス", "ルシア", "ルイサ", "ロシオ", "ロサ", "ロレーナ", "ヴァレンティナ", "ヴィクトリア", "エバ", "カルラ", "マグダレナ", "マリソル"],
     surnames: ["アルバレス", "イグレシアス", "オルテガ", "ガルシア", "カストロ", "カノ", "クルス", "ゴメス", "サンチェス", "サントス", "スアレス", "ディアス", "トーレス", "ナバロ", "フェルナンデス", "フローレス", "マルティネス", "モリーナ", "ロドリゲス", "ロメロ", "ロペス", "ルイス", "レイエス", "ベガ", "ビダル"],
   },
@@ -55,6 +55,42 @@ export const NAME_CULTURES = [
   },
 ];
 
+const COMMON_HISTORIC_MALE = [
+  "アベル", "アモス", "アルフォン", "アルヴィン", "アンセル", "アンセルム", "アンブロジウス", "アンリ", "アンセルムス", "アントン",
+  "イサーク", "イグナーツ", "イェルク", "ウルリヒ", "エリアス", "エルヴィン", "エルマー", "エンツォ", "オイゲン", "オーギュスタン",
+  "オスヴァルト", "カミロ", "カシミール", "カスティリオーネ", "カールマン", "ガスパール", "キリアン", "クリスティアン", "クリストフ", "グスターヴ",
+  "ケルビン", "コンスタンティン", "サイモン", "サルヴァドール", "シプリアン", "シリル", "シルヴェスター", "セヴェリン", "セラフィム", "ダミアン",
+  "ダニエル", "ディオン", "ディミトリ", "デニス", "ドミニク", "ニコデモ", "ノエル", "バルナバス", "バルドウィン", "バルトロメオ",
+  "パトリック", "パリス", "ヒューゴ", "ピエール", "ファビアン", "ファビオ", "フィン", "フェルディナン", "フェルディナンド", "フローリアン",
+  "ベネデット", "ベルトラン", "ベルンハルト", "ボニファティウス", "ボリス", "マルセル", "マルティヌス", "マルティーノ", "マルティン", "マルティヌス",
+  "ミラン", "ミロ", "ミロヴァン", "メルヒオール", "ヨナス", "ヨハネス", "ヨルダン", "ラウル", "ラザロ", "ラファエル",
+  "リヌス", "ルチアーノ", "ルドルフ", "ルドヴィク", "レミジウス", "レオポルト", "レナート", "ロジェ", "ロレンツ", "ロレンツォ",
+  "アドリアーノ", "アルフォンス", "アマデウス", "アロイス", "アンドレアス", "ヴァレンティノ", "ヴィクトル", "エウジェニオ", "オクタヴィアン", "カスパリアン",
+];
+
+const COMMON_HISTORIC_FEMALE = [
+  "アデリーナ", "アデリーヌ", "アドリアーナ", "アポロニア", "アマリア", "アマランタ", "アレクシア", "アレッタ", "アレッサ", "アロイジア",
+  "アンジェリカ", "アンジェリーナ", "アンナマリア", "イーダ", "イザベラ", "イネッサ", "イリーナ", "イルゼ", "ウルリケ", "エウジェニア",
+  "エヴァンジェリン", "エヴェリーナ", "エリカ", "エルヴィラ", "エルヴィーネ", "エルゼ", "オクタヴィア", "オデリア", "オフィーリア", "カシルダ",
+  "カミラ", "カリスタ", "カロリーナ", "カンデラリア", "キアラ", "キルスティン", "クリスティーナ", "クリスティーネ", "クレメンティナ", "グレーテ",
+  "コーデリア", "サビーナ", "サロメ", "シビル", "シルヴィア", "セラフィナ", "セレスティーナ", "ソフィア", "ダリア", "ダニエラ",
+  "ティルダ", "テオドラ", "ドナテッラ", "ナディア", "ナタリア", "ニーナ", "ノエミ", "パウリーナ", "パトリシア", "ヒルデ",
+  "フィリッパ", "フェリシア", "フローラ", "フロレンティーナ", "ベネディクタ", "ベルタ", "マグダ", "マグダレーナ", "マリーナ", "マルガレータ",
+  "マルティナ", "ミリアム", "ミレーナ", "メラニー", "モニカ", "ヨランダ", "ラウラ", "ラウレンツィア", "ラファエラ", "リリアーナ",
+  "リリアン", "リュドミラ", "ルチアーナ", "ルチーア", "ルドヴィカ", "レオノーラ", "レオポルディーネ", "レナ", "ロザリンド", "ロザリーナ",
+  "ヴァレンティーナ", "ヴィルヘルミナ", "ヴィオレッタ", "エミリア", "エステラ", "オルテンシア", "カテリーナ", "ジュスティーナ", "マチルダ", "ローザ",
+];
+
+function distinctNames(names) {
+  return [...new Set(names)];
+}
+
+export const NAME_CULTURES = REGIONAL_NAME_DATA.map((culture) => ({
+  ...culture,
+  male: distinctNames([...culture.male, ...COMMON_HISTORIC_MALE]),
+  female: distinctNames([...culture.female, ...COMMON_HISTORIC_FEMALE]),
+}));
+
 export const FAMOUS_FULL_NAMES = new Set([
   "ウィリアム・シェイクスピア", "チャールズ・ディケンズ", "ジェーン・オースティン", "メアリー・シェリー",
   "アーサー・コナン・ドイル", "ヴィクトリア・ウッドハル", "ルイ・パスツール", "ヴィクトル・ユーゴー",
@@ -68,21 +104,19 @@ export const FAMOUS_FULL_NAMES = new Set([
   "アレクサンドル・プーシキン", "ニコライ・ゴーゴリ", "マリー・キュリー", "ニコラ・テスラ",
 ]);
 
-function randomItem(items, random) {
-  return items[Math.floor(random() * items.length)];
-}
-
 function usedNameSet(usedNames) {
   if (usedNames instanceof Set) return usedNames;
   return new Set(usedNames ?? []);
 }
 
 export function generatePersonName(random, gender, { usedNames = [], surname = null, culture = null } = {}) {
-  const selectedCulture = culture ?? randomItem(NAME_CULTURES, random);
+  const cultureRoll = random();
+  const givenRoll = random();
+  const selectedCulture = culture ?? NAME_CULTURES[Math.floor(cultureRoll * NAME_CULTURES.length)];
   const givenNames = gender === "女性" ? selectedCulture.female : selectedCulture.male;
   const occupied = usedNameSet(usedNames);
-  const startGiven = Math.floor(random() * givenNames.length);
-  const startSurname = Math.floor(random() * selectedCulture.surnames.length);
+  const startGiven = Math.floor(givenRoll * givenNames.length);
+  const startSurname = Math.floor(givenRoll * selectedCulture.surnames.length);
 
   for (let givenOffset = 0; givenOffset < givenNames.length; givenOffset += 1) {
     const givenName = givenNames[(startGiven + givenOffset) % givenNames.length];
@@ -97,11 +131,11 @@ export function generatePersonName(random, gender, { usedNames = [], surname = n
   }
 
   let suffix = 2;
-  let givenName = randomItem(givenNames, random);
-  let name = `${givenName}・${surname ?? randomItem(selectedCulture.surnames, random)}`;
+  let givenName = givenNames[startGiven];
+  let name = `${givenName}・${surname ?? selectedCulture.surnames[startSurname]}`;
   while (occupied.has(name) || FAMOUS_FULL_NAMES.has(name)) {
-    givenName = `${randomItem(givenNames, random)}${suffix}`;
-    name = `${givenName}・${surname ?? randomItem(selectedCulture.surnames, random)}`;
+    givenName = `${givenNames[(startGiven + suffix - 2) % givenNames.length]}${suffix}`;
+    name = `${givenName}・${surname ?? selectedCulture.surnames[(startSurname + suffix - 2) % selectedCulture.surnames.length]}`;
     suffix += 1;
   }
   return { name, givenName, surname: name.split("・").at(-1), culture: selectedCulture.id };

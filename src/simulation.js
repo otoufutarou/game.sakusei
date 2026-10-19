@@ -1102,8 +1102,10 @@ function createNpc(life, random, spec) {
   life.npcs ??= [];
   life.npcSerial = (life.npcSerial ?? life.npcs.length) + 1;
   const raceId = spec.race ?? life.race.id;
+  const nameRolls = [random(), random()];
   const gender = spec.gender ?? randomItem(GENDERS, random);
-  const personName = generatePersonName(random, gender, {
+  let rollIndex = 0;
+  const personName = generatePersonName(() => nameRolls[rollIndex++], gender, {
     usedNames: namesAlreadyUsed(life),
     surname: spec.surname ?? (spec.relationship === "子" ? familySurname(life) : null),
     culture: NAME_CULTURES.find((culture) => culture.id === spec.nameCulture) ?? null,
