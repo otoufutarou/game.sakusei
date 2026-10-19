@@ -78,6 +78,8 @@ function missingDefaults(life) {
     npcs: [],
     relationships: [],
     historyFlags: [],
+    happiness: 50,
+    spendHistory: {},
     eventHistory: [],
     journal: [],
     children: [],

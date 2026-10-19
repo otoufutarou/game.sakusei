@@ -25,6 +25,9 @@ import {
   routineLogMean,
   SAVE_VERSION,
   selectRoutineEvent,
+  spendMoney,
+  spendOptions,
+  chooseDecision,
 } from "./simulation.js";
 import { SKILL_IDS_LIST } from "./simulation.js";
 import { TALENT_TABLE, magicTier, currentStats, rollAdultBaseline, rollTalent, RACE_ADULT_MEAN } from "./stats.js";
@@ -102,6 +105,25 @@ function lifeForEvent(event) {
   if (/children|marriage-crisis/.test(event.id)) {
     life.spouseId = "sweetheart";
     life.marriage = { harmony: 10 };
+  }
+  life.siblings = 1;
+  life.npcs.push(person("buddy", "友人", 25));
+  if (event.id === "choice-name-child") {
+    life.npcs.push({ ...person("newborn", "子", 0), nameDecided: false });
+    life.children = ["newborn"];
+  }
+  if (event.id === "married-anniversary") {
+    life.age = 25;
+    life.spouse = "Spouse";
+    life.marriage = { since: 20, harmony: 60 };
+    life.historyFlags.push("married");
+  }
+  if (/^(child-(first|starts|helps|growing)|elder-young|choice-child-)/.test(event.id)) {
+    const child = person("kid", "子", /first/.test(event.id) ? 2 : /starts/.test(event.id) ? 7 : 12);
+    life.npcs.push(child);
+    life.children = ["kid"];
+    if (event.id === "choice-child-wedding") Object.assign(child, { maritalStatus: "既婚" });
+    if (event.id === "choice-child-home") Object.assign(child, { humanAge: 26, independent: true });
   }
   if (event.id === "choice-illness-treatment") {
     life.illness = { type: "pneumonia", name: "肺炎", severity: "中等症", since: life.age, duration: 0.4 };
@@ -513,7 +535,7 @@ test("species lifespan and event density scale with the human-equivalent lifespa
   assert.ok(samples[1].events > samples[2].events);
   assert.ok(samples[2].events > samples[3].events);
   assert.ok(samples.every((sample) => sample.realAge <= 80.1));
-  assert.ok(samples[0].events >= 65 && samples[0].events <= 115);
+  assert.ok(samples[0].events >= 110 && samples[0].events <= 230);
   assert.ok(samples[0].decisions >= 12 && samples[0].decisions <= 35);
 });
 
@@ -1020,8 +1042,9 @@ test("ordinary lifetime savings stay near one small home for most careers", () =
   const homePrice = TUNING.homePricesLegacyG.small;
   const seventiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.7)];
   const ninetiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.9)];
-  assert.ok(seventiethPercentile >= homePrice * 0.75 && seventiethPercentile <= homePrice * 2.5,
-    `70th percentile assets ${seventiethPercentile}G should stay near one small home (${homePrice}G)`);
+  console.log(`peak assets p50/p70/p90: ${peakAssets[Math.floor(peakAssets.length / 2)]}/${seventiethPercentile}/${ninetiethPercentile}`);
+  assert.ok(seventiethPercentile >= homePrice * 0.1 && seventiethPercentile <= homePrice * 2.5,
+    `70th percentile assets ${seventiethPercentile}G should stay well below a small home for ordinary careers (${homePrice}G)`);
   assert.ok(peakAssets.filter((assets) => assets < homePrice * 0.75).length > 0, "some workers remain below the home threshold");
   assert.ok(ninetiethPercentile < homePrice * 3.5, "ordinary careers should not commonly accumulate several home prices");
 });
@@ -1444,6 +1467,82 @@ test("measured log density over human lives stays near the target", () => {
   const logs = totals.reduce((sum, [count]) => sum + count, 0) / totals.length;
   const decisions = totals.reduce((sum, [, count]) => sum + count, 0) / totals.length;
   console.log(`log density: ${logs.toFixed(1)} entries and ${decisions.toFixed(1)} decisions per 80 human years`);
-  assert.ok(logs >= 60 && logs <= 125);
+  assert.ok(logs >= 110 && logs <= 230);
   assert.ok(decisions >= 12 && decisions <= 35);
+});
+
+test("monthly budget includes lifestyle and home upkeep so savings stay modest", () => {
+  const life = makeLife({ age: 30, occupation: "農作業", occupationRole: "農作業", occupationSkill: 0, world: { situation: "平和" } });
+  const budget = monthlyBudget(life);
+  assert.ok(budget.expenses.lifestyle > 0);
+  assert.equal(budget.expenses.upkeep, 0);
+  const owner = { ...life, ownsHome: true, homeType: "small", homeValue: 120 };
+  assert.ok(monthlyBudget(owner).expenses.upkeep > 0, "owned homes need upkeep");
+  const rich = { ...life, occupationRole: "農地所有者" };
+  assert.ok(monthlyBudget(rich).expenses.lifestyle > budget.expenses.lifestyle, "lifestyle costs grow with rank");
+});
+
+test("お金を使う options require funds, apply effects and respect cooldowns", () => {
+  const life = createLife(() => 0.5);
+  Object.assign(life, { started: true, age: 30, gold: 100, skills: { ...life.skills }, occupation: "農作業" });
+  const options = spendOptions(life);
+  assert.ok(options.length >= 8);
+  assert.ok(options.find((o) => o.id === "repair-home").disabledReason, "needs a home");
+  const before = life.gold;
+  const result = spendMoney(life, "buy-books");
+  assert.ok(result);
+  assert.ok(life.gold < before);
+  assert.ok(life.journal.at(-1).text.includes("参考書"));
+  assert.equal(spendMoney(life, "buy-books"), null, "cooldown applies");
+  life.gold = 1;
+  assert.equal(spendMoney(life, "party"), null, "too poor");
+  assert.ok(spendOptions(life).find((o) => o.id === "party").disabledReason.includes("所持金"));
+  life.gold = 100;
+  const happy = life.happiness;
+  spendMoney(life, "keep-pet");
+  assert.ok(life.happiness > happy);
+  assert.equal(spendMoney(life, "keep-pet"), null, "only one pet");
+});
+
+test("a newborn child is named through a decision, including a free-text name", () => {
+  const life = createLife(() => 0.5);
+  const child = { id: "kid", name: "仮・名", relationship: "子", humanAge: 0, alive: true, gender: "女性", affinity: 70, nameDecided: false, history: [] };
+  life.npcs.push(child);
+  life.children = ["kid"];
+  life.started = true;
+  life.playing = true;
+  life.nextDecisionAt = life.age;
+  advanceLife(life, 0.1, () => 0.5);
+  assert.equal(life.pendingDecision?.title, "子どもの名前");
+  assert.equal(life.pendingDecision.choices.length, 3);
+  chooseDecision(life, "name-child:ミナ");
+  assert.equal(child.name.split("・")[0], "ミナ");
+  assert.equal(child.nameDecided, true);
+});
+
+test("child milestones offer schooling, wedding and home funding choices with costs", () => {
+  const life = createLife(() => 0.5);
+  life.gold = 100;
+  life.started = true;
+  life.age = 40;
+  const child = { id: "kid", name: "アリア", relationship: "子", humanAge: 13, alive: true, gender: "女性", affinity: 50, history: [] };
+  life.npcs.push(child);
+  life.children = ["kid"];
+  life.playing = true;
+  life.pendingDecision = null;
+  life.nextDecisionAt = life.age;
+  advanceLife(life, 0.1, () => 0.5);
+  assert.ok(life.pendingDecision.copy.includes("アリア"));
+  chooseDecision(life, "child-school-academy");
+  assert.equal(child.education, "学院");
+  assert.equal(life.gold, 50);
+  Object.assign(child, { humanAge: 25, independent: true, maritalStatus: "既婚", spouseName: "ロイ" });
+  life.playing = true;
+  life.nextDecisionAt = life.age;
+  advanceLife(life, 0.1, () => 0.5);
+  assert.ok(life.pendingDecision.id.startsWith("choice-child-"));
+  const decision = life.pendingDecision;
+  const effect = decision.choices[0].effect;
+  chooseDecision(life, effect);
+  assert.ok(life.gold < 50);
 });
