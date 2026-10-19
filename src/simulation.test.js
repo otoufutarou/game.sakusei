@@ -556,6 +556,38 @@ test("journey sprite moves with age and reflects species, home, and family", () 
   assert.equal(elfScene.gradients.length, 0);
   assert.equal(adult.gradients.length, 0);
 
+  const scaledHero = { ...humanLife, occupation: "兵士", appearance: { hair: "#34271f", coat: "#647d72" } };
+  const adultAlone = makeContext();
+  adultAlone.canvas.height = 150;
+  drawJourney(adultAlone, characterSprite, { life: scaledHero });
+  const householdLife = {
+    ...scaledHero,
+    spouseId: "adult",
+    children: ["child"],
+    npcs: [
+      { id: "adult", name: "Adult", humanAge: 40, alive: true, occupation: "兵士", race: "human" },
+      { id: "child", name: "Child", humanAge: 8, alive: true, occupation: "服飾店の見習い", race: "human" },
+    ],
+  };
+  const householdScene = makeContext();
+  householdScene.canvas.height = 150;
+  drawJourney(householdScene, characterSprite, { life: householdLife });
+  assert.equal(
+    Math.max(...householdScene.pixels.filter((pixel) => pixel[4] === "#657491").map((pixel) => pixel[3])),
+    Math.max(...adultAlone.pixels.filter((pixel) => pixel[4] === "#657491").map((pixel) => pixel[3])),
+    "adult household members use the hero's pixel scale",
+  );
+  const childAlone = makeContext();
+  childAlone.canvas.height = 150;
+  drawJourney(childAlone, characterSprite, {
+    life: { ...scaledHero, age: 8, occupation: "服飾店の見習い" },
+  });
+  assert.equal(
+    Math.max(...householdScene.pixels.filter((pixel) => pixel[4] === "#8fb0c4").map((pixel) => pixel[3])),
+    Math.max(...childAlone.pixels.filter((pixel) => pixel[4] === "#8fb0c4").map((pixel) => pixel[3])),
+    "children use the same pixel scale as a child hero",
+  );
+
   const familyLife = { ...humanLife, spouse: "Partner", children: ["Child"] };
   const familyScene = makeContext();
   drawJourney(familyScene, characterSprite, { life: familyLife, frame: 0 });
@@ -938,6 +970,22 @@ test("children are a choice: no automatic births, 'not now' defers, 'never' stop
   assert.equal(life.npcs.filter((npc) => npc.relationship === "子").length, 0);
   decide(life, "children-yes", random);
   assert.equal(life.childPlan, "wants");
+});
+
+test("marriage guarantees a child-planning decision within six months", () => {
+  const { life } = adultLife(14, { age: 30, gold: 20 });
+  const partner = { id: "partner", name: "配偶者", race: "human", humanAge: 29, alive: true, affinity: 100, history: [], relationship: "恋愛相手", occupation: "農作業", gender: "女性", maritalStatus: "未婚" };
+  life.npcs.push(partner);
+  life.romanticPartnerId = partner.id;
+  life.historyFlags.push("romantic-partner", "committed-relationship");
+  decide(life, "marry", () => 0);
+  assert.equal(life.spouseId, partner.id);
+  assert.equal(life.nextDecisionAt, life.age + 0.5);
+  advanceLife(life, 0.25, () => 0.99);
+  assert.equal(life.pendingDecision, null);
+  advanceLife(life, 0.25, () => 0.99);
+  assert.equal(life.pendingDecision?.id, "choice-children");
+  assert.match(life.pendingDecision.copy, /一人目の子供/);
 });
 
 test("the child-planning choice uses the woman's human-equivalent age and opens again after remarriage", () => {

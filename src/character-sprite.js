@@ -399,7 +399,7 @@ export function drawJourney(context, sprite, { life } = {}) {
     const side = index % 2 === 0 ? -1 : 1;
     const distance = (showingParents ? 34 : 20) + Math.floor(index / 2) * 19;
     const personX = Math.max(showingParents ? 24 : 11, Math.min(width - 11, x + side * distance));
-    drawPerson(context, spriteSpec(person), personX, baseline, showingParents ? scale : 1);
+    drawPerson(context, spriteSpec(person), personX, baseline, scale);
   });
   if (life.active !== false) {
     drawPerson(context, buildHeroSpec(life), x, baseline, scale);

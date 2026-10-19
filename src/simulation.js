@@ -56,9 +56,9 @@ export const TUNING = Object.freeze({
   scholarshipLivingCostLegacyG: 12,
   scholarshipRepaymentRate: 0.1,
   business: {
-    small: { cost: 8, chance: 0.6, revenue: 0.5 },
-    medium: { cost: 20, chance: 0.45, revenue: 1.2 },
-    large: { cost: 40, chance: 0.3, revenue: 2.5 },
+    small: { cost: 8, chance: 0.6, revenue: 0.25 },
+    medium: { cost: 20, chance: 0.45, revenue: 0.6 },
+    large: { cost: 40, chance: 0.3, revenue: 1.2 },
     maximumExpansions: 3,
     skillAdjustmentMax: 0.1,
     minimumChance: 0.2,
@@ -255,7 +255,7 @@ export const ROUTINE_EVENTS = [
   defineEvent("wealth-bad-harvest", "財産・借金", { minAge: 15, oncePerLife: true }, () => "不作で食料の値が上がり、冬を越すために蓄えを切り崩した。", { gold: -8, flag: "survived-famine" }),
   defineEvent("wealth-loan", "財産・借金", { minAge: 18, maximumGold: 5, oncePerLife: true }, () => "商人から少額融資の申し出があったが、借入は本人が選ぶことにした。", { flag: "loan-offer" }),
   defineEvent("wealth-repay-debt", "財産・借金", { minAge: 18, minimumGold: 12, requiresFlag: "small-loan", oncePerLife: true }, () => "少しずつ返してきた借金を完済し、帳面から名前を消してもらった。", { gold: -12, debt: -12, action: "clear-loan" }),
-  defineEvent("wealth-property", "財産・借金", { minAge: 25, minimumGold: 40, oncePerLife: true }, () => "長年の貯金で小さな家を手に入れ、初めて自分の住所を持った。", { gold: -35, fame: 2, flag: "owns-home", action: "buy-home" }),
+  defineEvent("wealth-property", "財産・借金", { minAge: 25, minimumGold: TUNING.homePricesLegacyG.small, oncePerLife: true }, () => "長年の貯金で小さな家を相場どおりの価格で手に入れ、初めて自分の住所を持った。", { gold: -TUNING.homePricesLegacyG.small, fame: 2, flag: "owns-home", action: "buy-home" }),
 
   defineEvent("health-fever", "病気・事故", { minAge: 5, oncePerLife: true }, () => "高熱に倒れたが、家族と町医者の看病で回復した。", { health: "回復中", gold: -2, flag: "survived-fever" }),
   defineEvent("health-work-injury", "病気・事故", { minAge: 13, occupations: ["農作業", "兵士", "冒険者", "職人見習い", "鍛冶職人"] }, () => "仕事中に怪我を負い、しばらく休んでから現場へ戻った。", { health: "療養中", gold: -3, flag: "work-injury" }),
@@ -655,6 +655,8 @@ export function applyRoutineEffect(life, event, random = Math.random) {
       break;
     case "buy-home":
       life.ownsHome = true;
+      life.homeType = "small";
+      life.homeValue = TUNING.homePricesLegacyG.small;
       break;
     case "sibling":
       life.siblings += 1;
@@ -730,24 +732,24 @@ export const SAVE_VERSION = 5;
 // are scaled-down placeholder values pending the designer's economy decision.
 const OCCUPATION_INCOME = Object.freeze({
   "まだ幼い子ども": 0,
-  "家業の手伝い": 0.8,
-  "農作業": 3,
-  "服飾店の見習い": 2.2,
-  "職人見習い": 2.5,
-  "鍛冶職人": 2.7,
+  "家業の手伝い": 1.6,
+  "農作業": 3.9,
+  "服飾店の見習い": 3.9,
+  "職人見習い": 3.9,
+  "鍛冶職人": 3.9,
   "兵士": 3.6,
-  "商人": 4.5,
+  "商人": 3.5,
   "冒険者": 3.5,
-  "教師": 4.2,
-  "魔術師": 5.5,
+  "教師": 3.6,
+  "魔術師": 4,
   "魔術師の弟子": 0,
   "魔術学院生": 0,
   "剣術の弟子": 0,
   "騎士学院生": 0,
   "学術院生": 0,
-  "騎士": 6,
-  "学者": 5,
-  "工房主": 7,
+  "騎士": 4.2,
+  "学者": 4,
+  "工房主": 4.2,
   "失業中": 0.4,
   "引退": 0.8,
   "狩りを覚える": 1.5,
@@ -851,11 +853,11 @@ function updateRole(life) {
 // ---------------------------------------------------------------- world state
 
 const WORLD_TABLE = Object.freeze({
-  "戦争中": { weight: 3, price: 1.25, income: { "商人": 1.25, "農作業": 0.85, "冒険者": 1.35, "兵士": 1.15 }, defaultIncome: 0.95, npcHazard: 1.5, illness: 1 },
+  "戦争中": { weight: 3, price: 1.25, income: { "商人": 1.05, "農作業": 0.85, "冒険者": 1.1, "兵士": 1.05 }, defaultIncome: 0.95, npcHazard: 1.5, illness: 1 },
   "疫病流行": { weight: 2, price: 1.1, income: {}, defaultIncome: 0.9, npcHazard: 4, illness: 3 },
-  "飢饉": { weight: 1.5, price: 1.6, income: { "農作業": 0.6 }, defaultIncome: 0.9, npcHazard: 2, illness: 1.3 },
-  "不況": { weight: 2, price: 1, income: { "商人": 0.7 }, defaultIncome: 0.8, npcHazard: 1, illness: 1 },
-  "魔物の襲撃": { weight: 1.5, price: 1.1, income: { "冒険者": 1.5, "農作業": 0.8 }, defaultIncome: 1, npcHazard: 1.3, illness: 1 },
+  "飢饉": { weight: 1.5, price: 1.8, income: { "農作業": 0.4 }, defaultIncome: 0.9, npcHazard: 2, illness: 1.3 },
+  "不況": { weight: 2, price: 1.15, income: { "商人": 0.5 }, defaultIncome: 0.8, npcHazard: 1, illness: 1 },
+  "魔物の襲撃": { weight: 1.5, price: 1.1, income: { "冒険者": 1.1, "農作業": 0.8 }, defaultIncome: 1, npcHazard: 1.3, illness: 1 },
 });
 
 export function worldModifiers(life) {
@@ -968,8 +970,8 @@ export function monthlyBudget(life, random = null) {
   const working = life.age >= 13 && !(life.occupation === "まだ幼い子ども");
   let work = working ? (OCCUPATION_INCOME[life.occupation] ?? 1) * roleMultiplier(life)
     * (1 + (life.occupationSkill ?? 0) / 200) * TUNING.wageMultiplier : 0;
-  work *= working ? mods.incomeFor(life.occupation) : 1;
   work += life.businessRevenue ?? 0;
+  work *= working ? mods.incomeFor(life.occupation) : 1;
   if (random && life.occupation === "冒険者") work *= 0.4 + 1.2 * random();
   const spouse = spouseNpc(life);
   const spouseWork = spouse ? (OCCUPATION_INCOME[spouse.occupation] ?? 1) * 0.9 * TUNING.wageMultiplier * mods.incomeFor(spouse.occupation) : 0;
@@ -1359,6 +1361,7 @@ function marryNpc(life, npc, { arranged = false } = {}) {
   addRelationship(life, "spouse");
   life.childPlan = "later";
   life.nextChildAskAt = life.age + 0.5;
+  life.childDecisionOffered = false;
   npcNote(life, npc, arranged ? "見合いで結婚した" : "結婚した");
 }
 
@@ -2074,7 +2077,7 @@ export const CHOICE_EVENTS = [
         && life.age >= (life.nextChildAskAt ?? 0)
         && (femalePartner(life)?.humanAge ?? Infinity) <= TUNING.childDecisionMaxHumanAge,
     },
-    copy: (life) => `${life.spouse ?? "配偶者"}と、これからの家族について話し合うことになった。子供を持つかどうか、二人の意思で決められる。`,
+    copy: (life) => `${life.spouse ?? "配偶者"}と、そろそろ子供を迎えるか話し合うことになった。${livingChildren(life).length ? "次の子供を持つか" : "一人目の子供を持つか"}、二人で決められる。`,
     choices: [
       { label: "子供を持ちたい", effect: "children-yes" },
       { label: "今はまだいい", effect: "children-later" },
@@ -2192,6 +2195,8 @@ function buildDecision(life, event, random) {
 
 function decisionFor(life, random) {
   const eligible = availableChoiceEvents(life);
+  const firstChildChoice = eligible.find((event) => event.id === "choice-children" && life.childDecisionOffered !== true);
+  if (firstChildChoice) return buildDecision(life, firstChildChoice, random);
   const priority = eligible.filter((event) => event.priority);
   const pool = priority.length > 0 ? priority : eligible;
   if (pool.length > 0 && (priority.length > 0 || random() < 0.65)) {
@@ -2648,6 +2653,7 @@ export function applyChoice(life, choice, random = Math.random) {
     }
     case "children-yes":
       life.childPlan = "wants";
+      life.childDecisionOffered = true;
       life.tryingSince = life.age;
       life.tryingUntil = life.age + 1;
       life.tryingMotherAge = femalePartner(life)?.humanAge ?? null;
@@ -2655,11 +2661,13 @@ export function applyChoice(life, choice, random = Math.random) {
       break;
     case "children-later":
       life.childPlan = "later";
+      life.childDecisionOffered = true;
       life.nextChildAskAt = life.age + childRetryDelay(random);
       message = "子供のことは、今はまだ考えないことにした。数年後に改めて話し合う。";
       break;
     case "children-never":
       life.childPlan = "none";
+      life.childDecisionOffered = true;
       message = "二人で話し合い、これからも子供は持たないと決めた。";
       break;
     case "mend-marriage":
@@ -2989,7 +2997,10 @@ export function applyChoice(life, choice, random = Math.random) {
   life.pendingDecision = null;
   life.playing = true;
   appendEvent(life, message, "life", "選択", `${decision.id}-result`);
-  life.nextDecisionAt = life.age + rollExponential(TUNING.decisionMeanYears, random);
+  const firstChildDecisionAt = life.spouseId && life.childPlan === "later" && life.childDecisionOffered !== true
+    ? Math.max(life.age, life.nextChildAskAt ?? life.age)
+    : Infinity;
+  life.nextDecisionAt = Math.min(firstChildDecisionAt, life.age + rollExponential(TUNING.decisionMeanYears, random));
   scheduleLog(life, random);
   return message;
 }
