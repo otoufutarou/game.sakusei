@@ -891,14 +891,14 @@ test("steady living does not create money and deliberate saving yields only a sm
   assert.equal(life.gold, 21);
 });
 
-test("ordinary wage cash flow leaves only a small monthly shortfall", () => {
+test("ordinary wage cash flow leaves only a modest monthly surplus", () => {
   const farmer = adultLife(46, { occupation: "農作業", occupationRole: "農作業", occupationSkill: 0, occupationYears: 0 }).life;
   farmer.world = { situation: "平和" };
   const budget = monthlyBudget(farmer);
-  assert.equal(budget.income.work, 3 * TUNING.wageMultiplier);
+  assert.equal(budget.income.work, 3.9 * TUNING.wageMultiplier);
   assert.equal(budget.expenses.living, TUNING.adultLivingCostLegacyG);
   assert.equal(budget.expenses.rent, TUNING.homeRentLegacyG);
-  assert.ok(budget.net < 0 && budget.net > -0.25, "an ordinary farmer's monthly cash flow has a small shortfall");
+  assert.ok(budget.net > 0 && budget.net < 0.75, "an ordinary farmer's monthly cash flow stays near break-even");
 });
 
 test("spending reduces gold, is recorded in the ledger, and unaffordable choices cannot be applied", () => {
@@ -925,6 +925,77 @@ test("monthly budget shows income, living costs, family costs, and debt interest
   life.gold = 20;
   advanceLife(life, 0.25, seededRandom(2));
   assert.ok(life.finance.lastMonth, "monthly accounting runs from the game loop");
+});
+
+test("famine hurts farmers, recessions reduce merchant and business income, and home costs match value", () => {
+  const farmer = adultLife(6, { occupation: "農作業", occupationSkill: 0 }).life;
+  farmer.world = { situation: "平和" };
+  const normalFarmBudget = monthlyBudget(farmer);
+  farmer.world = { situation: "飢饉" };
+  const famineFarmBudget = monthlyBudget(farmer);
+  assert.ok(famineFarmBudget.income.work < normalFarmBudget.income.work);
+  assert.ok(famineFarmBudget.net < normalFarmBudget.net);
+
+  const merchant = adultLife(7, { occupation: "商人", occupationSkill: 0, businessRevenue: 1 }).life;
+  merchant.world = { situation: "平和" };
+  const normalMerchantIncome = monthlyBudget(merchant).income.work;
+  merchant.world = { situation: "不況" };
+  assert.ok(monthlyBudget(merchant).income.work < normalMerchantIncome);
+
+  const homeEvent = ROUTINE_EVENTS.find((event) => event.id === "wealth-property");
+  assert.equal(homeEvent.requirements.minimumGold, TUNING.homePricesLegacyG.small);
+  assert.equal(homeEvent.effect.gold, -TUNING.homePricesLegacyG.small);
+  const buyer = makeLife({ age: 30, gold: TUNING.homePricesLegacyG.small });
+  applyRoutineEffect(buyer, homeEvent, () => 0.5);
+  assert.equal(buyer.gold, 0);
+  assert.equal(buyer.ownsHome, true);
+  assert.equal(buyer.homeValue, TUNING.homePricesLegacyG.small);
+});
+
+test("ordinary lifetime savings stay near one small home for most careers", () => {
+  const jobs = ["農作業", "商人", "職人見習い", "兵士", "教師", "冒険者", "服飾店の見習い"];
+  const peakAssets = [];
+  for (let seed = 1; seed <= 210; seed += 1) {
+    const random = seededRandom(seed * 51);
+    const life = createLife(random);
+    Object.assign(life, {
+      age: 20,
+      occupation: jobs[(seed - 1) % jobs.length],
+      occupationSkill: 0,
+      occupationYears: 0,
+      occupationRole: undefined,
+      gold: 0,
+      playing: true,
+      started: true,
+      maxHumanAge: 65,
+      nextDecisionAt: 20.5,
+      nextLogAt: 20.25,
+      nextSocialAt: Infinity,
+      status: { name: "都市平民" },
+      parents: null,
+    });
+    let peak = 0;
+    let guard = 0;
+    while (life.active && life.age < 65 && guard++ < 5_000) {
+      if (life.pendingDecision) {
+        const choice = life.pendingDecision.choices.find((item) => item.effect === "steady" || item.effect === "save")
+          ?? life.pendingDecision.choices.at(-1);
+        if (choice) applyChoice(life, choice, random);
+        life.playing = true;
+      }
+      advanceLife(life, 0.25, random);
+      peak = Math.max(peak, life.gold + (life.homeValue ?? 0));
+    }
+    peakAssets.push(peak);
+  }
+  peakAssets.sort((left, right) => left - right);
+  const homePrice = TUNING.homePricesLegacyG.small;
+  const seventiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.7)];
+  const ninetiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.9)];
+  assert.ok(seventiethPercentile >= homePrice * 0.75 && seventiethPercentile <= homePrice * 2.5,
+    `70th percentile assets ${seventiethPercentile}G should stay near one small home (${homePrice}G)`);
+  assert.ok(peakAssets.filter((assets) => assets < homePrice * 0.75).length > 0, "some workers remain below the home threshold");
+  assert.ok(ninetiethPercentile < homePrice * 3.5, "ordinary careers should not commonly accumulate several home prices");
 });
 
 test("meeting NPCs, romance, and marriage run through persistent NPCs and refusals are possible", () => {

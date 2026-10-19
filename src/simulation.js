@@ -2997,10 +2997,14 @@ export function applyChoice(life, choice, random = Math.random) {
   life.pendingDecision = null;
   life.playing = true;
   appendEvent(life, message, "life", "選択", `${decision.id}-result`);
+  const mother = femalePartner(life);
   const firstChildDecisionAt = life.spouseId && life.childPlan === "later" && life.childDecisionOffered !== true
+    && mother && mother.humanAge <= TUNING.childDecisionMaxHumanAge
     ? Math.max(life.age, life.nextChildAskAt ?? life.age)
     : Infinity;
-  life.nextDecisionAt = Math.min(firstChildDecisionAt, life.age + rollExponential(TUNING.decisionMeanYears, random));
+  life.nextDecisionAt = Number.isFinite(firstChildDecisionAt)
+    ? firstChildDecisionAt
+    : life.age + rollExponential(TUNING.decisionMeanYears, random);
   scheduleLog(life, random);
   return message;
 }
