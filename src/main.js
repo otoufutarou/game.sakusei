@@ -6,6 +6,8 @@ import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillNam
 import { clearSave, inspectSave, saveToStorage } from "./save.js";
 
 const BUILD_ID = "__BUILD_ID__";
+// Prevent the synchronous next-decision jump from running forever if the event scheduler fails to yield.
+const NEXT_DECISION_STEP_LIMIT = 1000;
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -507,7 +509,7 @@ function advanceToNextDecision() {
   if (!life.active || life.pendingDecision) return;
   life.playing = true;
   let steps = 0;
-  while (life.active && !life.pendingDecision && steps < 1000) {
+  while (life.active && !life.pendingDecision && steps < NEXT_DECISION_STEP_LIMIT) {
     advanceLife(life, 0.25, random);
     steps += 1;
   }

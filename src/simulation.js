@@ -596,11 +596,12 @@ function updateOccupationRank(life) {
 
 export function advanceSkills(life, humanYears) {
   if (humanYears <= 0) return;
+  const plans = skillGrowthPlans(life);
+  if (plans.size === 0) return;
   const skills = ensureSkillState(life);
   const accumulatedMonths = (life.skillMonthProgress ?? 0) + humanYears * 12;
   const completeMonths = Math.floor(accumulatedMonths + Number.EPSILON);
   life.skillMonthProgress = accumulatedMonths - completeMonths;
-  const plans = skillGrowthPlans(life);
   const raceFactor = RACE_SKILL_FACTORS[life.race?.id] ?? {};
   const ageMultiplier = RACE_AGE_MULTIPLIERS[life.race?.id] ?? life.race?.multiplier ?? 1;
 
@@ -1039,9 +1040,11 @@ function careerPreview(life, career) {
     occupationSkill: life.skills?.[career.skill] ?? 0,
   };
   const salary = monthlyBudget(salaryLife).income.work;
+  const situation = life.world?.situation ?? life.situation;
+  const situationLabel = situation && !["平和", "平穏"].includes(situation) ? `（${situation}）` : "";
   const skill = Math.round(life.skills?.[career.skill] ?? 0);
   return [
-    `月給: 約${salary.toFixed(1)}G`,
+    `月給${situationLabel}: 約${salary.toFixed(1)}G`,
     `必要技能: ${skillName(career.skill)}${career.minimum}+（現在${skill}）・${career.description}`,
   ];
 }
@@ -2137,21 +2140,24 @@ export function availableChoiceEvents(life) {
   return CHOICE_EVENTS.filter((event) => isRoutineEventEligible(life, event));
 }
 
-function compactChoicePreview(preview) {
+const CHOICE_PREVIEW_COST_PREFIXES = ["費用", "授業料", "通常医療費", "魔法医療費", "受験料", "無利子貸与"];
+const CHOICE_PREVIEW_DETAIL_PREFIXES = ["メリット", "成長する技能", "月給", "必要技能", "基本成功率", "成功率", "危険度", "売却額", "期間", "条件", "入学条件"];
+
+export function compactChoicePreview(preview) {
   const lines = (preview ?? []).filter(Boolean);
   if (lines.length <= 2) return lines;
-  const cost = lines.find((line) => /^(費用|授業料|通常医療費|魔法医療費|受験料|無利子貸与)/.test(line));
-  const outcome = lines.find((line) => /^(メリット|成長する技能|月給|必要技能|基本成功率|成功率|危険度|売却額)/.test(line));
+  const hasPrefix = (line, prefixes) => prefixes.some((prefix) => line.startsWith(`${prefix}:`));
+  const cost = lines.find((line) => hasPrefix(line, CHOICE_PREVIEW_COST_PREFIXES));
+  const details = lines.filter((line) => hasPrefix(line, CHOICE_PREVIEW_DETAIL_PREFIXES) && line !== cost).slice(0, 2);
   const downside = lines.find((line) => line.startsWith("デメリット:"));
   const primary = cost ?? lines[0];
-  const details = [];
-  if (outcome && outcome !== primary) details.push(outcome.replace(/^(メリット|成長する技能):\s*/, ""));
-  if (downside && downside !== primary) details.push(downside.replace(/^デメリット:\s*/, "注意: "));
-  if (details.length === 0) {
+  const selectedDetails = details.filter((line) => line !== primary);
+  if (downside && downside !== primary && selectedDetails.length < 2) selectedDetails.push(downside.replace(/^デメリット:\s*/, "注意: "));
+  if (selectedDetails.length === 0) {
     const other = lines.find((line) => line !== primary);
-    if (other) details.push(other);
+    if (other) selectedDetails.push(other);
   }
-  return [primary, details.join("／")].filter(Boolean);
+  return [primary, selectedDetails.join("／")].filter(Boolean);
 }
 
 function decorateChoice(life, choice) {
@@ -3224,7 +3230,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       life.age += elapsed;
       remaining -= elapsed;
       advanceOccupation(life, elapsed);
-      if (Object.values(life.skillPractice ?? {}).some((practice) => practice.activity > 0)) advanceSkills(life, elapsed);
+      advanceSkills(life, elapsed);
       advanceNpcs(life, elapsed, random);
       life.finance ??= { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 };
       life.finance.monthProgress += elapsed * 12;

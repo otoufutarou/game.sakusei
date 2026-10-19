@@ -1,4 +1,4 @@
-import { NATIONS, RACES, SAVE_VERSION, SKILL_IDS_LIST, TUNING } from "./simulation.js";
+import { formatGold, NATIONS, RACES, SAVE_VERSION, SKILL_IDS_LIST, TUNING } from "./simulation.js";
 import { RACE_ADULT_MEAN, STAT_KEYS } from "./stats.js";
 
 export const SAVE_KEY = "tomoshibi-save";
@@ -8,7 +8,7 @@ const LEGACY_SILVER_PER_G = 30;
 
 function migrateLegacyCurrencyText(value) {
   if (typeof value === "string") {
-    return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => `${Math.round(Number(amount.replaceAll(",", "")) / LEGACY_SILVER_PER_G)}G`);
+    return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => formatGold(Number(amount.replaceAll(",", "")) / LEGACY_SILVER_PER_G));
   }
   if (Array.isArray(value)) {
     return value.map(migrateLegacyCurrencyText);
@@ -89,6 +89,7 @@ function missingDefaults(life) {
 export function migrateLife(data) {
   if (!data || typeof data !== "object") throw new Error("invalid save");
   const life = data;
+  const migrateSilverText = (life.saveVersion ?? 0) < SAVE_VERSION;
   life.race = RACES.find((race) => race.id === life.race) ?? RACES[0];
   life.nation = NATIONS.find((nation) => nation.id === life.nation) ?? NATIONS[0];
   const defaults = missingDefaults(life);
@@ -132,8 +133,10 @@ export function migrateLife(data) {
   life.playing = false;
   life.saveVersion = SAVE_VERSION;
   life.currencySchema ??= "legacy-G-v1";
-  life.journal = migrateLegacyCurrencyText(life.journal);
-  life.lastResult = migrateLegacyCurrencyText(life.lastResult);
+  if (migrateSilverText) {
+    life.journal = migrateLegacyCurrencyText(life.journal);
+    life.lastResult = migrateLegacyCurrencyText(life.lastResult);
+  }
   if (life.ownsHome && !life.homeType) {
     life.homeType = "small";
     life.homeValue = TUNING.homePricesLegacyG.small;

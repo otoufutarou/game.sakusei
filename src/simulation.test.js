@@ -12,6 +12,7 @@ import {
   NATIONS,
   applyChoice,
   choiceAvailability,
+  compactChoicePreview,
   formatGold,
   monthlyBudget,
   occupationTitle,
@@ -21,6 +22,7 @@ import {
   skillGrowthDelta,
   skillTier,
   routineLogMean,
+  SAVE_VERSION,
   selectRoutineEvent,
 } from "./simulation.js";
 import { SKILL_IDS_LIST } from "./simulation.js";
@@ -952,6 +954,13 @@ test("famine hurts farmers, recessions reduce merchant and business income, and 
   assert.equal(buyer.homeValue, TUNING.homePricesLegacyG.small);
 });
 
+test("choice summaries retain important conditions and durations", () => {
+  const preview = compactChoicePreview(["費用: 8G", "条件: 10歳以上", "期間: 約5年", "デメリット: 修行中は収入がない"]);
+  assert.equal(preview.length, 2);
+  assert.ok(preview[1].includes("条件: 10歳以上"));
+  assert.ok(preview[1].includes("期間: 約5年"));
+});
+
 test("ordinary lifetime savings stay near one small home for most careers", () => {
   const jobs = ["農作業", "商人", "職人見習い", "兵士", "教師", "冒険者", "服飾店の見習い"];
   const peakAssets = [];
@@ -1190,6 +1199,16 @@ test("balances stay unchanged in G and old silver-denominated log text is migrat
   assert.equal(legacy.debt, 2);
   assert.equal(legacy.currencySchema, "legacy-G-v1");
   assert.equal(legacy.journal[0].text, "相続財産60G");
+  const fractional = migrateLife({
+    name: "旧データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION - 1,
+    journal: [{ text: "1銀貨と15銀貨" }],
+  });
+  assert.equal(fractional.journal[0].text, "0.03Gと0.5G");
+  const current = migrateLife({
+    name: "現行データ", race: "human", nation: "kingdom", age: 20, saveVersion: SAVE_VERSION,
+    journal: [{ text: "メモ: 1銀貨という言葉" }],
+  });
+  assert.equal(current.journal[0].text, "メモ: 1銀貨という言葉");
 });
 
 test("housing purchases and resale preserve a separately valued estate asset", () => {
@@ -1271,7 +1290,11 @@ test("job offers show explicit career destinations with salary and skill require
   assert.ok(choices.slice(0, -1).length >= 2);
   assert.ok(choices.slice(0, -1).every((choice) => choice.effect.startsWith("career-change:")));
   assert.ok(choices.slice(0, 2).every((choice) => choice.preview.length === 2
-    && choice.preview[0].startsWith("月給:") && choice.preview[1].startsWith("必要技能:")));
+    && choice.preview[0].startsWith("月給") && choice.preview[1].startsWith("必要技能:")));
+  const recessionOptions = event.choicesFor({
+    ...life, occupation: "失業中", skills: { ...life.skills, trade: 5 }, world: { situation: "不況" },
+  });
+  assert.ok(recessionOptions.find((choice) => choice.effect === "career-change:商人").preview[0].includes("不況"));
   const unemployed = makeLife({ age: 16, occupation: "失業中", skills: { manual: 0, farming: 0, craft: 0 } });
   unemployed.eventHistory.push({ id: event.id, age: 14 });
   assert.equal(isRoutineEventEligible(unemployed, event), true, "unemployed teenagers can receive explicit job options");
