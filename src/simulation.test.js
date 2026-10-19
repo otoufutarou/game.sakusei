@@ -840,6 +840,20 @@ test("a will changes estate beneficiaries but never transfers the peerage to the
   assert.equal(spouse.peerageTitle, undefined);
 });
 
+test("peerage passes through a deceased eldest child's living descendant", () => {
+  const { life } = adultLife(34, { age: 60, gold: 0, peerageTitle: "侯爵家" });
+  const firstborn = { id: "firstborn", name: "先に生まれた子", humanAge: 35, alive: false, relationship: "子" };
+  const younger = { id: "younger", name: "次子", humanAge: 30, alive: true, relationship: "子" };
+  const grandchild = { id: "grandchild", name: "孫", humanAge: 8, alive: true, relationship: "孫", parentId: firstborn.id };
+  life.npcs = [firstborn, younger, grandchild];
+  life.children = [firstborn.id, younger.id];
+  life.maxHumanAge = 60;
+  advanceLife(life, 0.25, () => 0.9);
+  assert.equal(life.titleSuccession.heirId, grandchild.id);
+  assert.equal(grandchild.peerageTitle, "侯爵家");
+  assert.equal(younger.peerageTitle, undefined);
+});
+
 test("business expansion uses the configured base rates and caps the count of investments", () => {
   assert.deepEqual(TUNING.business.small.chance, 0.6);
   assert.deepEqual(TUNING.business.medium.chance, 0.45);

@@ -2944,8 +2944,24 @@ function settleInheritance(life) {
 
 function transferPeerage(life) {
   if (!life.peerageTitle) return;
-  const children = livingChildren(life).sort((a, b) => (b.humanAge ?? 0) - (a.humanAge ?? 0));
-  const heir = children[0] ?? null;
+  const children = (life.children ?? [])
+    .map((entry) => typeof entry === "string" ? (life.npcs ?? []).find((npc) => npc.id === entry) : entry)
+    .filter(Boolean)
+    .sort((a, b) => (b.humanAge ?? 0) - (a.humanAge ?? 0));
+  const findLivingDescendant = (ancestor, seen = new Set()) => {
+    if (!ancestor || seen.has(ancestor.id)) return null;
+    seen.add(ancestor.id);
+    if (ancestor.alive) return ancestor;
+    const descendants = (life.npcs ?? [])
+      .filter((npc) => npc.parentId === ancestor.id)
+      .sort((a, b) => (b.humanAge ?? 0) - (a.humanAge ?? 0));
+    for (const descendant of descendants) {
+      const heir = findLivingDescendant(descendant, seen);
+      if (heir) return heir;
+    }
+    return null;
+  };
+  const heir = children.map((child) => findLivingDescendant(child)).find(Boolean) ?? null;
   if (heir) {
     heir.peerageTitle = life.peerageTitle;
     heir.legalStatus = "貴族";
