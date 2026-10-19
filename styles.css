@@ -89,7 +89,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ability-track > span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #78936c, #bf9a51); transition: width .15s ease; }
 .ability-note { margin: 4px 0 0; }
 .character-scene { position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background: #e8dfc8; }
-.character-scene canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
+.character-scene canvas { display: block; width: 100%; height: auto; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
 .scene-caption { position: absolute; left: 6px; top: 4px; padding: 1px 7px; border-radius: 999px; background: #fffaf0cc; font-size: 10px; color: var(--muted); }
 .family-line { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 

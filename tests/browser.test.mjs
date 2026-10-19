@@ -87,8 +87,8 @@ test("new life: hero is born, time runs, pause/resume, decisions, sprite, reload
   assert.ok((await page.textContent("#birth-record")).includes("出生国"));
   assert.ok((await spriteInk(page)) > 3, "sprite drawn before the life starts");
   assert.equal(await page.locator("#ability-bars [data-stat-key]").count(), 6);
-  assert.equal(await page.locator("#event-list").evaluate((events) => events.compareDocumentPosition(document.querySelector("#ability-bars")) & Node.DOCUMENT_POSITION_FOLLOWING), Node.DOCUMENT_POSITION_FOLLOWING);
-  assert.equal(await page.locator("#ability-bars").evaluate((bars) => bars.compareDocumentPosition(document.querySelector("#character-canvas")) & Node.DOCUMENT_POSITION_FOLLOWING), Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(await page.locator("#event-list").evaluate((events) => Boolean(events.compareDocumentPosition(document.querySelector("#ability-bars")) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+  assert.equal(await page.locator("#ability-bars").evaluate((bars) => Boolean(bars.compareDocumentPosition(document.querySelector("#character-canvas")) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
   assert.ok(Number(await page.locator('[data-stat-key="body"] .ability-track').getAttribute("aria-valuenow")) >= 0);
 
   await page.click("#begin-life");
