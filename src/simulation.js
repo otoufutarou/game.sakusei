@@ -1528,6 +1528,8 @@ function finishTraining(life, random, { early = false, silent = false } = {}) {
   if (!silent) appendEvent(life, text, "life", "教育", `edu-finish-${plan.kind}-${Math.floor(life.age)}`);
 }
 
+const PAYER = Object.freeze({ PLAYER: "player", PARENTS: "parents" });
+
 // Result of an academy application: tuition, funding route, and any reason it is closed.
 function academyFunding(life, kind) {
   const config = {
@@ -1548,24 +1550,24 @@ function academyFunding(life, kind) {
     eligible = ["王族", "貴族", "都市平民"].includes(status) || stats.combat >= 75;
     if (!eligible) return { reason: "騎士学院は貴族・市民の子、または領主の推薦が必要" };
   }
-  if (["王族", "貴族"].includes(status)) return { cost: 0, payer: "player", via: "家が学費を負担", label: config.label };
+  if (["王族", "貴族"].includes(status)) return { cost: 0, payer: PAYER.PLAYER, via: "家が学費を負担", label: config.label };
   if ((life.parents?.gold ?? 0) >= config.fee) {
-    return { cost: config.fee, payer: "parents", via: "親の財産から学費を負担", label: config.label };
+    return { cost: config.fee, payer: PAYER.PARENTS, via: "親の財産から学費を負担", label: config.label };
   }
   if (scholarship) {
     return {
       cost: 0,
-      payer: "player",
+      payer: PAYER.PLAYER,
       loan: config.fee + config.years * TUNING.scholarshipLivingCostLegacyG,
       via: "適性条件を満たす無利子奨学金貸与",
       label: config.label,
     };
   }
-  if (life.gold >= config.fee) return { cost: config.fee, payer: "player", via: "学費を支払う", label: config.label };
+  if (life.gold >= config.fee) return { cost: config.fee, payer: PAYER.PLAYER, via: "学費を支払う", label: config.label };
   if (status === "農民・労働者" || life.gold < config.fee) {
-    return { reason: `学費${config.fee}Gが必要（所持金${Math.floor(life.gold)}G。奨学金・推薦の条件も満たしていない）`, cost: config.fee, payer: "player" };
+    return { reason: `学費${config.fee}Gが必要（所持金${Math.floor(life.gold)}G。奨学金・推薦の条件も満たしていない）`, cost: config.fee, payer: PAYER.PLAYER };
   }
-  return { cost: config.fee, payer: "player", via: "学費を支払う", label: config.label };
+  return { cost: config.fee, payer: PAYER.PLAYER, via: "学費を支払う", label: config.label };
 }
 
 function mentorQuality(random) {
@@ -1582,17 +1584,25 @@ function ruleCost(life, rule) {
 }
 
 function rulePayer(life, rule) {
-  return (typeof rule.payer === "function" ? rule.payer(life) : rule.payer) ?? "player";
+  return (typeof rule.payer === "function" ? rule.payer(life) : rule.payer) ?? PAYER.PLAYER;
 }
 
 function availableFunds(life, payer) {
-  return payer === "parents" ? life.parents?.gold ?? 0 : life.gold ?? 0;
+  return payer === PAYER.PARENTS ? life.parents?.gold ?? 0 : life.gold ?? 0;
 }
 
 const toSilver = (value) => Math.round(value * TUNING.currency.silverPerLegacyG);
 const silver = (value) => `${toSilver(value)}銀貨`;
 const toSilverText = (text) => String(text).replace(/(-?[\d,]+(?:\.\d+)?)G/g, (_, amount) => silver(Number(amount.replaceAll(",", ""))));
 const gold = (value) => silver(value);
+
+function insufficientFundsReason(life, cost, payer) {
+  const funds = availableFunds(life, payer);
+  if (cost <= funds) return null;
+  return payer === PAYER.PARENTS
+    ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(funds))}）`
+    : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(funds))}）`;
+}
 
 function businessChance(life, size) {
   const skill = life.skills?.[life.occupation === "農作業" ? "farming" : "trade"] ?? 0;
@@ -1626,12 +1636,12 @@ const CHOICE_RULES = {
   "edu-town-school": {
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で町の教室に通えない" : null),
     cost: EDUCATION.primaryTuition,
-    payer: "parents",
-    preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, `メリット: 読み書きの基礎を${EDUCATION.primaryYears}年間学ぶ／デメリット: 家族の蓄えを使う`],
+    payer: PAYER.PARENTS,
+    preview: (life, cost) => [`費用: 親の財産から${cost}G`, `メリット: 読み書きの基礎を${EDUCATION.primaryYears}年間学ぶ／デメリット: 家族の蓄えを使う`],
   },
   "edu-tutor": {
     cost: EDUCATION.tutorTuition,
-    payer: "parents",
+    payer: PAYER.PARENTS,
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で家庭教師を雇えない" : null),
     preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
   },
@@ -1677,7 +1687,7 @@ const CHOICE_RULES = {
   },
   "academy-magic": {
     cost: (life) => academyFunding(life, "magic").cost ?? 60,
-    payer: (life) => academyFunding(life, "magic").payer ?? "player",
+    payer: (life) => academyFunding(life, "magic").payer ?? PAYER.PLAYER,
     check: (life) => academyFunding(life, "magic").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "magic");
@@ -1686,7 +1696,7 @@ const CHOICE_RULES = {
   },
   "academy-knight": {
     cost: (life) => academyFunding(life, "knight").cost ?? 50,
-    payer: (life) => academyFunding(life, "knight").payer ?? "player",
+    payer: (life) => academyFunding(life, "knight").payer ?? PAYER.PLAYER,
     check: (life) => academyFunding(life, "knight").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "knight");
@@ -1695,7 +1705,7 @@ const CHOICE_RULES = {
   },
   "academy-scholar": {
     cost: (life) => academyFunding(life, "scholar").cost ?? 40,
-    payer: (life) => academyFunding(life, "scholar").payer ?? "player",
+    payer: (life) => academyFunding(life, "scholar").payer ?? PAYER.PLAYER,
     check: (life) => academyFunding(life, "scholar").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "scholar");
@@ -2108,12 +2118,7 @@ function decorateChoice(life, choice) {
   if (!rule) return { ...choice };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
-  let disabledReason = rule.check?.(life) ?? null;
-  if (!disabledReason && cost > availableFunds(life, payer)) {
-    disabledReason = payer === "parents"
-      ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`
-      : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`;
-  }
+  const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
   return { ...choice, cost, payer, preview: rule.preview?.(life, cost) ?? [], disabledReason };
 }
 
@@ -2122,12 +2127,7 @@ export function choiceAvailability(life, effect) {
   if (!rule) return { cost: 0, disabledReason: null };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
-  let disabledReason = rule.check?.(life) ?? null;
-  if (!disabledReason && cost > availableFunds(life, payer)) {
-    disabledReason = payer === "parents"
-      ? `親の財産が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`
-      : `所持金が足りない（必要${silver(cost)}／所持${silver(Math.floor(availableFunds(life, payer)))}）`;
-  }
+  const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
   return { cost, payer, disabledReason };
 }
 
@@ -2308,8 +2308,7 @@ export function applyChoice(life, choice, random = Math.random) {
   const notes = [];
   const result = { cost: availability.cost };
   if (availability.cost > 0) {
-    if (availability.payer === "parents") {
-      if ((life.parents?.gold ?? 0) < availability.cost) return null;
+    if (availability.payer === PAYER.PARENTS) {
       life.parents.gold -= availability.cost;
       notes.push(`親の財産から${gold(availability.cost)}を支払った`);
     } else {
