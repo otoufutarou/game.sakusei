@@ -1626,13 +1626,13 @@ const CHOICE_RULES = {
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で町の教室に通えない" : null),
     cost: 4,
     payer: "parents",
-    preview: (life, cost) => [`費用: 家族負担${cost}G`, "メリット: 読み書きの基礎が身につく／デメリット: 家族の蓄えを使う"],
+    preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, "メリット: 読み書きの基礎を4年間学ぶ／デメリット: 家族の蓄えを使う"],
   },
   "edu-tutor": {
     cost: 12,
     payer: "parents",
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で家庭教師を雇えない" : null),
-    preview: (life, cost) => [`費用: 家族負担${cost}G`, "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
+    preview: (life, cost) => [`費用: 親の財産から${gold(cost)}`, "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
   },
   "edu-family-work": {
     preview: () => ["費用: なし", "成長する技能: 肉体労働・読み書き（独学）", "メリット: 家計を助けられる", "デメリット: 読み書きの習得が遅い"],

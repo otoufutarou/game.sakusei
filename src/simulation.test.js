@@ -750,6 +750,10 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.equal(life.pendingDecision.title, "学びのはじまり");
   assert.ok(life.pendingDecision.choices.filter((choice) => ["edu-town-school", "edu-tutor"].includes(choice.effect))
     .every((choice) => choice.preview.length === 2));
+  assert.deepEqual(life.pendingDecision.choices.find((choice) => choice.effect === "edu-town-school").preview, [
+    "費用: 親の財産から120銀貨",
+    "メリット: 読み書きの基礎を4年間学ぶ／デメリット: 家族の蓄えを使う",
+  ]);
   applyChoice(life, { effect: "edu-town-school" }, () => 0.9);
   assert.equal(life.parents.gold, 6);
   assert.equal(life.gold, 0, "tuition is not taken from the child's empty wallet");
