@@ -1,5 +1,5 @@
 import {
-  actualAge, advanceLife, chooseDecision, createLife, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST,
+  actualAge, advanceLife, chooseDecision, createLife, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST, TUNING,
 } from "./simulation.js";
 import { characterSprite, drawJourney } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
@@ -75,7 +75,7 @@ function humanAgeNote(target = life) {
 }
 
 function money(value) {
-  return `${Math.round(value * 10) / 10}G`;
+  return `${Math.round(value * TUNING.currency.silverPerLegacyG)}銀貨`;
 }
 
 function createJournalItem(event) {
@@ -119,8 +119,8 @@ function showPrologue() {
     ["身分", life.status.name],
     ["父の職業", parents.father],
     ["母の職業", parents.mother],
-    ["家庭の財産", `${parents.gold}G`],
-    ["家庭の借金", `${parents.debt}G`],
+    ["家庭の財産", money(parents.gold)],
+    ["家庭の借金", money(parents.debt)],
     ["魔力", `${Math.round(life.mana)}（${magicTier(life.mana)}）`],
   ]);
   elements.prologueNote.textContent = "能力・才能・魔力は生まれつきで、見えるのは魔力だけです。詳細は人生の途中でステータスから確認できます。";
@@ -216,8 +216,10 @@ function updateLifeDisplay() {
   elements.occupation.textContent = occupationTitle(life);
   elements.sceneCaption.textContent = life.race.id === "dragon" ? "山の巣のそば" : `${life.nation.name}・${life.home}`;
   elements.canvas.parentElement.dataset.region = life.race.id === "dragon" ? "dragon" : life.nation.id;
-  elements.gold.textContent = `${Math.floor(life.gold)}G${life.debt > 0.5 ? `（借${Math.floor(life.debt)}）` : ""}`;
-  elements.health.textContent = life.health;
+  elements.gold.textContent = `${money(life.gold)}${life.debt > 0.5 ? `（借${money(life.debt)}）` : ""}`;
+  elements.health.textContent = life.illness
+    ? `${life.illness.name}・${life.illness.severity}`
+    : life.health;
   elements.people.textContent = familySummary();
 }
 
@@ -248,6 +250,10 @@ function renderStatus() {
     ["健康", life.health],
     ["所持金", money(life.gold)],
     ["借金", money(life.debt)],
+    ["奨学金残高", money(life.scholarshipBalance ?? 0)],
+    ["住居評価額", life.ownsHome ? money(life.homeValue ?? 0) : "借家"],
+    ["遺言", life.will?.type === "legal" ? "通常の相続" : life.will?.type === "charity" ? `${life.will.charity}へ寄付` : "指定先あり"],
+    ...(life.peerageTitle ? [["爵位", life.peerageTitle]] : []),
     ["名声", Math.round(life.fame)],
   ], life.promotionNote ? [element("p", "note", `昇進: ${life.promotionNote}`)] : null);
   section("基礎能力", STAT_KEYS.map((key) => [STAT_LABELS[key], `${Math.round(stats[key])}（${abilityLabel(stats[key])}）`]), [
@@ -306,6 +312,7 @@ function renderMoney() {
     ["医療費", `-${money(budget.expenses.medical)}`],
     ["借金の利息", `-${money(budget.expenses.interest)}`],
     ["借金の返済", `-${money(budget.repayment)}`],
+    ["奨学金の返済", `-${money(budget.scholarshipRepayment ?? 0)}`],
     ["差引", `${budget.net >= 0 ? "+" : ""}${money(budget.net)}`],
   ], ["金額は暫定の設定です。毎月の家計処理は人生ログには表示されません。"]);
   const recent = (life.finance?.recent ?? []).slice(-8).reverse();
@@ -389,7 +396,12 @@ function showEnding() {
     ["人間換算", `${Math.floor(life.deathAge)}年`],
     ["最期", life.deathCause],
     ["最後の仕事", occupationTitle(life)],
-    ["財産", money(life.gold)],
+    ["死亡時の財産", money(life.inheritanceEstate ?? life.gold)],
+    ["相続", life.inheritance?.length
+      ? life.inheritance.map((heir) => `${heir.name} ${money(heir.amount)}`).join("、")
+      : life.inheritanceTo ?? "相続先なし"],
+    ["清算した借金", money(life.debtSettledAtDeath ?? 0)],
+    ["爵位継承", life.titleSuccession?.heirName ?? life.titleSuccession?.destination ?? "該当なし"],
     ["子供", `${(life.npcs ?? []).filter((npc) => npc.relationship === "子").length}人`],
     ["人生の記録", `${life.eventCount} 件`],
   ]);
