@@ -516,7 +516,7 @@ function advanceToNextDecision() {
   updateControls();
   if (life.pendingDecision) showDecision();
   if (!life.active) showEnding();
-  save(true);
+  else save(true);
 }
 
 function tick(timestamp) {

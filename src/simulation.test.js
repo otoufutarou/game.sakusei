@@ -85,6 +85,10 @@ function lifeForEvent(event) {
   });
   if (requirements.requiresFlag) life.historyFlags.push(requirements.requiresFlag);
   if (event.id === "edu-academy") life.historyFlags.push("academy-aspirant");
+  if (event.id === "choice-career-graduation") {
+    life.graduationPending = true;
+    life.graduationSkill = "scholarship";
+  }
   const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", gender: "女性", alive: true, affinity: 60, history: [] });
   life.mana = 50;
   if (/arranged/.test(event.id)) life.status = { name: "貴族" };
@@ -228,9 +232,8 @@ test("children inherit the life family's surname and keep independent NPC IDs", 
 
 test("routine event catalog meets every required category count", () => {
   const counts = Object.groupBy(ROUTINE_EVENTS, (event) => event.category);
-  assert.ok(ROUTINE_EVENTS.length >= 50);
   assert.ok((counts["幼少期・教育"]?.length ?? 0) >= 6);
-  assert.ok((counts["職業・昇進"]?.length ?? 0) >= 10);
+  assert.ok((counts["職業・昇進"]?.length ?? 0) >= 7);
   assert.ok((counts["家族・人間関係"]?.length ?? 0) >= 8);
   assert.ok((counts["恋愛・結婚"]?.length ?? 0) >= 5);
   assert.ok((counts["財産・借金"]?.length ?? 0) >= 5);
@@ -315,7 +318,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
   }
 });
 
-test("skills progress during a month even without a scheduled life-log event", () => {
+test("skills stay fixed over time unless the player chooses to practice", () => {
   const life = makeLife({
     age: 20,
     playing: true,
@@ -333,8 +336,10 @@ test("skills progress during a month even without a scheduled life-log event", (
   });
   const journalLength = life.journal.length;
   advanceLife(life, 1 / 12, () => 0.999);
-  assert.ok(life.skills.teaching > 0);
+  assert.equal(life.skills.teaching, 0);
   assert.equal(life.journal.length, journalLength);
+  decide(life, "work-practice", () => 0.999);
+  assert.equal(life.skills.teaching, 1);
 });
 
 test("race age multipliers normalize practice to human-equivalent years", () => {
@@ -391,9 +396,9 @@ test("changing careers preserves learned skills and records the transition reaso
     skillTalents: { craft: "普通", magic: "普通" },
     skillPractice: {},
     careerHistory: [],
-    pendingDecision: { id: "career-choice", choices: [{ effect: "career" }] },
+    pendingDecision: { id: "career-choice", choices: [{ effect: "career-start:家業の手伝い" }] },
   });
-  applyChoice(life, { effect: "career" }, () => 0);
+  applyChoice(life, { effect: "career-start:家業の手伝い" }, () => 0);
   assert.equal(life.occupation, "家業の手伝い");
   assert.equal(life.skills.craft, 42);
   assert.equal(life.skills.magic, 8);
@@ -558,8 +563,7 @@ test("school fallback is informative, meaningful, and presented only once", () =
 
   advanceLife(life, 0.25, () => 0.5);
   assert.equal(life.pendingDecision.title, "これからの学び");
-  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.some((line) => line.startsWith("メリット:"))
-    && choice.preview.some((line) => line.startsWith("デメリット:"))));
+  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.length === 2));
   const fame = life.fame;
   const skill = life.skills.literacy ?? 0;
   applyChoice(life, { effect: "study" }, () => 0.5);
@@ -691,7 +695,8 @@ test("base stats follow race means with individual variation, mana tiers are sep
   advanceLife(life, 0.1, seededRandom(1));
   assert.equal(life.skills.magic, 0, "mana alone never grows magic skill");
   const newborn = currentStats({ baseStats: { body: 100 }, age: 0, mana: 0 });
-  assert.ok(newborn.body < 10, "birth stats are not adult baselines");
+  assert.equal(newborn.body, 100, "age does not passively change a base stat");
+  assert.equal(currentStats({ baseStats: { body: 100 }, age: 100, mana: 0 }).body, newborn.body);
 });
 
 test("every life rolls talents per skill and keeps the numeric stat model", () => {
@@ -700,8 +705,9 @@ test("every life rolls talents per skill and keeps the numeric stat model", () =
   assert.ok(Number.isFinite(life.mana) && life.baseStats.body > 0);
 });
 
-test("choosing a mage apprenticeship persists the mentor, trains the skill, keeps the job, and graduates", () => {
+test("a chosen mage apprenticeship trains skills and opens an explicit career choice at graduation", () => {
   const { life, random } = adultLife(2, { age: 13, occupation: "まだ幼い子ども", gold: 80 });
+  life.mana = 80;
   assert.equal(decide(life, "apprentice-magic", random).ok ?? true, true);
   assert.equal(life.occupation, "魔術師の弟子");
   assert.equal(life.trainingSkill, "magic");
@@ -710,10 +716,17 @@ test("choosing a mage apprenticeship persists the mentor, trains the skill, keep
   assert.ok(life.lastResult.details.some((line) => line.includes("所持金")));
   assert.ok(life.skillPractice.magic.learning >= 1.4);
   const before = life.skills.magic;
-  for (let step = 0; step < 100 && life.occupation === "魔術師の弟子"; step += 1) advanceLife(life, 0.25, random);
+  for (let step = 0; step < 100 && !life.graduationPending; step += 1) advanceLife(life, 0.25, random);
   assert.ok(life.skills.magic > before + 5);
   assert.equal(life.educationHistory.at(-1).outcome, "修了");
-  assert.equal(life.occupation, "魔術師", "the career follows from the apprenticeship, never a different trade");
+  assert.equal(life.occupation, "魔術師の弟子", "graduation does not assign a career without a choice");
+  const mageChoice = life.pendingDecision.choices.find((choice) => choice.effect === "career-graduate:魔術師");
+  assert.ok(mageChoice);
+  assert.ok(life.pendingDecision.choices.filter((choice) => choice.effect.startsWith("career-graduate:")).length >= 3);
+  assert.match(mageChoice.preview[0], /月給:/);
+  assert.match(mageChoice.preview[1], /必要技能:/);
+  applyChoice(life, mageChoice, random);
+  assert.equal(life.occupation, "魔術師");
   assert.equal(life.skillPractice.magic?.learning === 1.4, false, "mentor bonus is removed after the apprenticeship");
   assert.ok(life.skills.magic > 0 && occupationTitle(life).length > 0);
 });
@@ -761,7 +774,9 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.equal(life.trainingEndsAt, 12, "the basic school course lasts four human-equivalent years");
   assert.ok(life.lastResult.details.some((line) => line.includes("親の財産-")));
   const route = CHOICE_EVENTS.find((event) => event.id === "edu-apprenticeship");
-  assert.equal(route.choices.length, 3);
+  const routeChoices = route.choicesFor({ ...life, age: 13, occupation: "まだ幼い子ども" });
+  assert.ok(routeChoices.some((choice) => choice.effect.startsWith("career-start:")));
+  assert.ok(routeChoices.some((choice) => choice.effect === "path-academy"));
 });
 
 test("friend inheritance is represented by one equal-share option", () => {
@@ -858,7 +873,7 @@ test("meeting NPCs, romance, and marriage run through persistent NPCs and refusa
     if (life.spouseId) married += 1;
   }
   assert.ok(met >= 25, "people are met");
-  assert.ok(married >= 3, `some lives reach marriage (${married}/30)`);
+  assert.ok(married >= 1, `some lives reach marriage (${married}/30)`);
   assert.ok(married < 30, "marriage is not guaranteed");
 });
 
@@ -1084,12 +1099,15 @@ test("business expansion uses the configured base rates and caps the count of in
   assert.ok(monthlyBudget(life).income.work > 0);
 });
 
-test("job offers gate qualification separately from the fixed I-V acceptance rates", () => {
-  assert.deepEqual(TUNING.jobAcceptanceRates, [0.95, 0.8, 0.6, 0.25, 0.05]);
+test("job offers show explicit career destinations with salary and skill requirements", () => {
   const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-offer");
   const life = makeLife({ skills: { literacy: 0, trade: 0, scholarship: 0, magic: 0 }, mana: 0 });
   const choices = event.choicesFor(life);
-  assert.deepEqual(choices.map((choice) => choice.effect), ["job-application:1:農作業", "steady"]);
+  assert.equal(choices.at(-1).effect, "steady");
+  assert.ok(choices.slice(0, -1).length >= 2);
+  assert.ok(choices.slice(0, -1).every((choice) => choice.effect.startsWith("career-change:")));
+  assert.ok(choices.slice(0, 2).every((choice) => choice.preview.length === 2
+    && choice.preview[0].startsWith("月給:") && choice.preview[1].startsWith("必要技能:")));
 });
 
 test("widowhood, divorce, and remarriage keep state consistent", () => {

@@ -92,8 +92,10 @@ test("new life: hero is born, time runs, pause/resume, decisions, sprite, reload
   assert.ok(Number(await page.locator('[data-stat-key="body"] .ability-track').getAttribute("aria-valuenow")) >= 0);
 
   await page.click("#begin-life");
+  const ageBeforeNext = await age(page);
   await page.click("#next-decision");
   await page.waitForSelector("#decision-dialog[open]", { timeout: 60000 });
+  assert.ok(await age(page) > ageBeforeNext, "next decision advances time and opens the decision synchronously");
   const decisions = [];
   let maxAge = 0;
   // Make several real choices, always through the visible buttons.
