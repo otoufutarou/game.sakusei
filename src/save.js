@@ -3,9 +3,12 @@ import { RACE_ADULT_MEAN, STAT_KEYS } from "./stats.js";
 
 export const SAVE_KEY = "tomoshibi-save";
 
+// Historical logs used 30 silver coins per G.
+const LEGACY_SILVER_PER_G = 30;
+
 function migrateLegacyCurrencyText(value) {
   if (typeof value === "string") {
-    return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => `${Math.round(Number(amount.replaceAll(",", "")) / 30)}G`);
+    return value.replace(/(-?[\d,]+(?:\.\d+)?)銀貨/g, (_, amount) => `${Math.round(Number(amount.replaceAll(",", "")) / LEGACY_SILVER_PER_G)}G`);
   }
   if (Array.isArray(value)) {
     return value.map(migrateLegacyCurrencyText);

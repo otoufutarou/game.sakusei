@@ -1043,7 +1043,7 @@ function careerPreview(life, career) {
   const skill = Math.round(life.skills?.[career.skill] ?? 0);
   return [
     `月給: 約${salary.toFixed(1)}G`,
-    `必要技能: ${skillName(career.skill)}${career.minimum}+（現在${skill}）`,
+    `必要技能: ${skillName(career.skill)}${career.minimum}+（現在${skill}）・${career.description}`,
   ];
 }
 
@@ -1893,7 +1893,10 @@ export const CHOICE_EVENTS = [
   },
   {
     id: "choice-work-offer", title: "遠方からの仕事の誘い", category: "職業・昇進", weight: 1,
-    requirements: { minAge: 20, cooldownYears: 8, custom: (life) => availableCareerOptions(life).length > 0 },
+    requirements: {
+      minAge: 14, cooldownYears: 8,
+      custom: (life) => (life.age >= 20 || life.occupation === "失業中") && availableCareerOptions(life).length > 0,
+    },
     copy: "別の町から求人が届いた。必要技能と月給を確認して、今の仕事から移るか選べる。",
     choicesFor: (life) => [
       ...careerChoices(life, { effect: "career-change" }),
@@ -2120,13 +2123,30 @@ export function availableChoiceEvents(life) {
   return CHOICE_EVENTS.filter((event) => isRoutineEventEligible(life, event));
 }
 
+function compactChoicePreview(preview) {
+  const lines = (preview ?? []).filter(Boolean);
+  if (lines.length <= 2) return lines;
+  const cost = lines.find((line) => /^(費用|授業料|通常医療費|魔法医療費|受験料|無利子貸与)/.test(line));
+  const outcome = lines.find((line) => /^(メリット|成長する技能|月給|必要技能|基本成功率|成功率|危険度|売却額)/.test(line));
+  const downside = lines.find((line) => line.startsWith("デメリット:"));
+  const primary = cost ?? lines[0];
+  const details = [];
+  if (outcome && outcome !== primary) details.push(outcome.replace(/^(メリット|成長する技能):\s*/, ""));
+  if (downside && downside !== primary) details.push(downside.replace(/^デメリット:\s*/, "注意: "));
+  if (details.length === 0) {
+    const other = lines.find((line) => line !== primary);
+    if (other) details.push(other);
+  }
+  return [primary, details.join("／")].filter(Boolean);
+}
+
 function decorateChoice(life, choice) {
   const rule = CHOICE_RULES[choice.effect] ?? CHOICE_RULES[choice.effect.split(":")[0]];
-  if (!rule) return { ...choice, preview: (choice.preview ?? []).slice(0, 2) };
+  if (!rule) return { ...choice, preview: compactChoicePreview(choice.preview) };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
   const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
-  return { ...choice, cost, payer, preview: (rule.preview?.(life, cost) ?? []).slice(0, 2), disabledReason };
+  return { ...choice, cost, payer, preview: compactChoicePreview(rule.preview?.(life, cost)), disabledReason };
 }
 
 export function choiceAvailability(life, effect) {
@@ -2152,7 +2172,7 @@ function buildDecision(life, event, random) {
     .map((choice) => ({
       ...choice,
       label: toGoldText(choice.label),
-      preview: (choice.preview ?? []).slice(0, 2).map(toGoldText),
+      preview: compactChoicePreview(choice.preview).map(toGoldText),
       disabledReason: choice.disabledReason ? toGoldText(choice.disabledReason) : null,
     }));
   decision.copy = toGoldText(decision.copy);
@@ -2260,7 +2280,7 @@ function decisionFor(life, random) {
       return {
         ...decorated,
         label: toGoldText(decorated.label),
-        preview: (decorated.preview ?? []).map(toGoldText),
+        preview: compactChoicePreview(decorated.preview).map(toGoldText),
       };
     }),
   };

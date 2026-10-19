@@ -71,7 +71,7 @@ function seededRandom(seed) {
 function lifeForEvent(event) {
   const requirements = event.requirements ?? {};
   const race = RACES.find((candidate) => candidate.id === requirements.raceIds?.[0]) ?? RACES[0];
-  const age = Math.max(requirements.minAge ?? 0, 1);
+  const age = Math.max(event.id === "choice-work-offer" ? 20 : requirements.minAge ?? 0, 1);
   const life = makeLife({
     age: requirements.maxAge === undefined ? age : Math.min(age, requirements.maxAge),
     race,
@@ -564,6 +564,9 @@ test("school fallback is informative, meaningful, and presented only once", () =
   advanceLife(life, 0.25, () => 0.5);
   assert.equal(life.pendingDecision.title, "これからの学び");
   assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.length === 2));
+  const workChoice = life.pendingDecision.choices.find((choice) => choice.effect === "work");
+  assert.match(workChoice.preview[1], /所持金/);
+  assert.match(workChoice.preview[1], /注意:/);
   const fame = life.fame;
   const skill = life.skills.literacy ?? 0;
   applyChoice(life, { effect: "study" }, () => 0.5);
@@ -1108,6 +1111,8 @@ test("job offers show explicit career destinations with salary and skill require
   assert.ok(choices.slice(0, -1).every((choice) => choice.effect.startsWith("career-change:")));
   assert.ok(choices.slice(0, 2).every((choice) => choice.preview.length === 2
     && choice.preview[0].startsWith("月給:") && choice.preview[1].startsWith("必要技能:")));
+  const unemployed = makeLife({ age: 16, occupation: "失業中", skills: { manual: 0, farming: 0, craft: 0 } });
+  assert.equal(isRoutineEventEligible(unemployed, event), true, "unemployed teenagers can receive explicit job options");
 });
 
 test("widowhood, divorce, and remarriage keep state consistent", () => {

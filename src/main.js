@@ -511,6 +511,7 @@ function advanceToNextDecision() {
     advanceLife(life, 0.25, random);
     steps += 1;
   }
+  life.playing = false;
   addJournalEvents();
   updateLifeDisplay();
   updateControls();
