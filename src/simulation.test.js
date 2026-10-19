@@ -311,6 +311,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
       skills: { teaching: 0 },
       skillTalents: { teaching: "普通" },
       skillPractice: {},
+      trainingPlan: {},
       skillMonthProgress: 0,
       skillHistory: [],
     });
@@ -344,6 +345,30 @@ test("skills stay fixed over time unless the player chooses to practice", () => 
   assert.equal(life.skills.teaching, 1);
 });
 
+test("chosen ongoing practice grows its skill without passive career skill growth", () => {
+  const life = makeLife({
+    age: 20,
+    playing: true,
+    occupation: "教師",
+    occupationSkill: 0,
+    occupationRank: "初心者",
+    skills: { magic: 0, teaching: 0 },
+    skillTalents: { magic: "普通", teaching: "普通" },
+    skillPractice: {},
+    skillMonthProgress: 0,
+    skillHistory: [],
+    nextLogAt: 50,
+    nextDecisionAt: 50,
+    maxHumanAge: 100,
+    pendingDecision: { id: "magic-training", choices: [{ effect: "self-study-magic" }] },
+  });
+  applyChoice(life, { effect: "self-study-magic" }, () => 0.5);
+  const selectedMagic = life.skills.magic;
+  advanceLife(life, 0.25, () => 0.999);
+  assert.ok(life.skills.magic > selectedMagic);
+  assert.equal(life.skills.teaching, 0);
+});
+
 test("race age multipliers normalize practice to human-equivalent years", () => {
   const teachingAfterTenYears = (race) => {
     const life = makeLife({
@@ -355,6 +380,7 @@ test("race age multipliers normalize practice to human-equivalent years", () => 
       skills: { teaching: 0 },
       skillTalents: { teaching: "普通" },
       skillPractice: {},
+      trainingPlan: {},
       skillMonthProgress: 0,
       skillHistory: [],
     });
@@ -383,6 +409,7 @@ test("skill tiers follow the specified ranges and remain separate from tenure", 
   life.skills = { teaching: 30 };
   life.skillTalents = { teaching: "普通" };
   life.skillPractice = {};
+  life.trainingPlan = {};
   life.skillMonthProgress = 0;
   advanceSkills(life, 1);
   assert.equal(life.occupationYears, 21);
