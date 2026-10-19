@@ -1548,23 +1548,24 @@ function academyFunding(life, kind) {
     eligible = ["王族", "貴族", "都市平民"].includes(status) || stats.combat >= 75;
     if (!eligible) return { reason: "騎士学院は貴族・市民の子、または領主の推薦が必要" };
   }
-  if (["王族", "貴族"].includes(status)) return { cost: 0, via: "家が学費を負担", label: config.label };
+  if (["王族", "貴族"].includes(status)) return { cost: 0, payer: "player", via: "家が学費を負担", label: config.label };
   if ((life.parents?.gold ?? 0) >= config.fee) {
     return { cost: config.fee, payer: "parents", via: "親の財産から学費を負担", label: config.label };
   }
   if (scholarship) {
     return {
       cost: 0,
+      payer: "player",
       loan: config.fee + config.years * TUNING.scholarshipLivingCostLegacyG,
       via: "適性条件を満たす無利子奨学金貸与",
       label: config.label,
     };
   }
-  if (life.gold >= config.fee) return { cost: config.fee, via: "学費を支払う", label: config.label };
+  if (life.gold >= config.fee) return { cost: config.fee, payer: "player", via: "学費を支払う", label: config.label };
   if (status === "農民・労働者" || life.gold < config.fee) {
-    return { reason: `学費${config.fee}Gが必要（所持金${Math.floor(life.gold)}G。奨学金・推薦の条件も満たしていない）`, cost: config.fee };
+    return { reason: `学費${config.fee}Gが必要（所持金${Math.floor(life.gold)}G。奨学金・推薦の条件も満たしていない）`, cost: config.fee, payer: "player" };
   }
-  return { cost: config.fee, via: "学費を支払う", label: config.label };
+  return { cost: config.fee, payer: "player", via: "学費を支払う", label: config.label };
 }
 
 function mentorQuality(random) {
@@ -1580,7 +1581,7 @@ function ruleCost(life, rule) {
 }
 
 function rulePayer(life, rule) {
-  return typeof rule.payer === "function" ? rule.payer(life) : rule.payer ?? "player";
+  return (typeof rule.payer === "function" ? rule.payer(life) : rule.payer) ?? "player";
 }
 
 function availableFunds(life, payer) {
@@ -1600,31 +1601,38 @@ function businessChance(life, size) {
 }
 
 // Cost, availability, and the information shown to the player before choosing.
+const CHILDHOOD_CHOICE_REWARDS = Object.freeze({
+  studyLiteracy: 2,
+  workGold: 2,
+  workSkill: 2,
+  mentorTeaching: 3,
+  mentorFame: 2,
+});
+
 const CHOICE_RULES = {
   study: {
-    preview: () => ["費用: なし", "メリット: 読み書き技能+2、学習を継続", "デメリット: 家業の手伝いによる収入・技能は得られない"],
+    preview: () => ["費用: なし", `メリット: 読み書き技能+${CHILDHOOD_CHOICE_REWARDS.studyLiteracy}、学習を継続`, "デメリット: 家業の手伝いによる収入・技能は得られない"],
   },
   work: {
-    preview: () => ["費用: なし", "メリット: 所持金+2G、仕事の技能+2", "デメリット: 読み書きの学習は進まない"],
+    preview: () => ["費用: なし", `メリット: 所持金+${CHILDHOOD_CHOICE_REWARDS.workGold}G、仕事の技能+${CHILDHOOD_CHOICE_REWARDS.workSkill}`, "デメリット: 読み書きの学習は進まない"],
   },
   mentor: {
-    preview: () => ["費用: なし", "メリット: 指導技能+3、名声+2", "デメリット: 所持金や職業技能は増えない"],
+    preview: () => ["費用: なし", `メリット: 指導技能+${CHILDHOOD_CHOICE_REWARDS.mentorTeaching}、名声+${CHILDHOOD_CHOICE_REWARDS.mentorFame}`, "デメリット: 所持金や職業技能は増えない"],
   },
   rest: {
     preview: () => ["費用: なし", "メリット: 家族との関係を支え、病気でなければ体調を整える", "デメリット: 技能・収入・名声は増えない"],
   },
   "edu-town-school": {
-    cost: 0,
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で町の教室に通えない" : null),
     cost: 4,
     payer: "parents",
-    preview: () => ["費用: 家族負担4G", "メリット: 読み書きの基礎が身につく／デメリット: 家族の蓄えを使う"],
+    preview: (life, cost) => [`費用: 家族負担${cost}G`, "メリット: 読み書きの基礎が身につく／デメリット: 家族の蓄えを使う"],
   },
   "edu-tutor": {
     cost: 12,
     payer: "parents",
     check: (life) => (STATUS_BARRED.includes(life.status?.name) ? "身分の制限で家庭教師を雇えない" : null),
-    preview: () => ["費用: 家族負担12G", "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
+    preview: (life, cost) => [`費用: 家族負担${cost}G`, "メリット: より速く学べる／デメリット: 家族の蓄えを多く使う"],
   },
   "edu-family-work": {
     preview: () => ["費用: なし", "成長する技能: 肉体労働・読み書き（独学）", "メリット: 家計を助けられる", "デメリット: 読み書きの習得が遅い"],
@@ -1668,7 +1676,7 @@ const CHOICE_RULES = {
   },
   "academy-magic": {
     cost: (life) => academyFunding(life, "magic").cost ?? 60,
-    payer: (life) => academyFunding(life, "magic").payer,
+    payer: (life) => academyFunding(life, "magic").payer ?? "player",
     check: (life) => academyFunding(life, "magic").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "magic");
@@ -1677,7 +1685,7 @@ const CHOICE_RULES = {
   },
   "academy-knight": {
     cost: (life) => academyFunding(life, "knight").cost ?? 50,
-    payer: (life) => academyFunding(life, "knight").payer,
+    payer: (life) => academyFunding(life, "knight").payer ?? "player",
     check: (life) => academyFunding(life, "knight").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "knight");
@@ -1686,7 +1694,7 @@ const CHOICE_RULES = {
   },
   "academy-scholar": {
     cost: (life) => academyFunding(life, "scholar").cost ?? 40,
-    payer: (life) => academyFunding(life, "scholar").payer,
+    payer: (life) => academyFunding(life, "scholar").payer ?? "player",
     check: (life) => academyFunding(life, "scholar").reason ?? null,
     preview: (life) => {
       const funding = academyFunding(life, "scholar");
@@ -2413,7 +2421,7 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "友人と遊び、近所で顔を覚えてもらった。";
       break;
     case "study":
-      addSkillPoints(life, "literacy", 2, "学びの時間");
+      addSkillPoints(life, "literacy", CHILDHOOD_CHOICE_REWARDS.studyLiteracy, "学びの時間");
       addFlag(life, "continued-education");
       life.educationStatus = "学習継続中";
       if (life.age < 13) life.school ??= { id: "home-study", name: "家庭学習" };
@@ -2421,10 +2429,10 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "学びを続け、新しい知識を身につけた。";
       break;
     case "work":
-      life.gold += 2;
+      life.gold += CHILDHOOD_CHOICE_REWARDS.workGold;
       addSkillPoints(life, life.occupation === "まだ幼い子ども"
         ? "manual"
-        : OCCUPATION_SKILLS[life.occupation] ?? "manual", 2, "家業の手伝い");
+        : OCCUPATION_SKILLS[life.occupation] ?? "manual", CHILDHOOD_CHOICE_REWARDS.workSkill, "家業の手伝い");
       addFlag(life, "helped-family-work");
       message = "家の仕事を手伝い、暮らしを支えた。";
       break;
@@ -2476,8 +2484,8 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "出費を見直し、わずかな蓄えを残すことにした。";
       break;
     case "mentor":
-      addSkillPoints(life, "teaching", 3, "若者への指導");
-      life.fame += 2;
+      addSkillPoints(life, "teaching", CHILDHOOD_CHOICE_REWARDS.mentorTeaching, "若者への指導");
+      life.fame += CHILDHOOD_CHOICE_REWARDS.mentorFame;
       message = "若い人たちに経験を伝え、感謝された。";
       break;
     case "ore-contract": {
