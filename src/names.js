@@ -87,6 +87,8 @@ function distinctNames(names) {
 
 export const NAME_CULTURES = REGIONAL_NAME_DATA.map((culture) => ({
   ...culture,
+  regionalMale: culture.male,
+  regionalFemale: culture.female,
   male: distinctNames([...culture.male, ...COMMON_HISTORIC_MALE]),
   female: distinctNames([...culture.female, ...COMMON_HISTORIC_FEMALE]),
 }));
@@ -113,10 +115,14 @@ export function generatePersonName(random, gender, { usedNames = [], surname = n
   const cultureRoll = random();
   const givenRoll = random();
   const selectedCulture = culture ?? NAME_CULTURES[Math.floor(cultureRoll * NAME_CULTURES.length)];
-  const givenNames = gender === "女性" ? selectedCulture.female : selectedCulture.male;
+  const allGivenNames = gender === "女性" ? selectedCulture.female : selectedCulture.male;
+  const regionalGivenNames = gender === "女性" ? selectedCulture.regionalFemale : selectedCulture.regionalMale;
+  const useRegionalPool = givenRoll < 0.7;
+  const givenNames = useRegionalPool ? regionalGivenNames : allGivenNames;
   const occupied = usedNameSet(usedNames);
-  const startGiven = Math.floor(givenRoll * givenNames.length);
-  const startSurname = Math.floor(givenRoll * selectedCulture.surnames.length);
+  const normalizedGivenRoll = useRegionalPool ? givenRoll / 0.7 : (givenRoll - 0.7) / 0.3;
+  const startGiven = Math.floor(normalizedGivenRoll * givenNames.length);
+  const startSurname = Math.floor(((cultureRoll + givenRoll) % 1) * selectedCulture.surnames.length);
 
   for (let givenOffset = 0; givenOffset < givenNames.length; givenOffset += 1) {
     const givenName = givenNames[(startGiven + givenOffset) % givenNames.length];
