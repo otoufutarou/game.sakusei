@@ -24,7 +24,7 @@ Each deploy copies only the game files into `_site/` and appends `?v=<commit>` t
 - **Choices:** each option shows cost and expected effects up front, unaffordable options are disabled with the reason, and a result dialog lists what changed.
 - **World:** war, plague, famine, recession and monster raids change prices, income, conscription and danger for the hero and NPCs.
 - **Log:** events are logged only when something happens; 80 human-equivalent years average roughly 100–110 entries (about 26 decisions with their results).
-- **UI:** compact phone layout (checked at 375/390/430 px), latest four log entries with a full history screen, a lifespan progress bar, and a static compositional pixel scene. Regional scenery, homes, work sites, age-stage sprites and living family update when their underlying life state changes.
+- **UI:** compact phone layout (checked at 375/390/430 px), latest four log entries with a full history screen, a lifespan progress bar, and a static compositional pixel scene. Current base abilities remain visible as bars between the recent log and pixel scene, with brief change indicators; the occupation, health and money summaries use a compact layout. Regional scenery, homes, work sites, age-stage sprites and living family update when their underlying life state changes.
 - **Save:** the life is autosaved to `localStorage` and can be resumed from the title screen; older saves are migrated without inventing past events.
 
 ### Provisional values (not final specification)
