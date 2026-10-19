@@ -57,6 +57,23 @@ const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
 const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 
 export const TUNING = Object.freeze({
+  currency: { silverPerLegacyG: 30 },
+  homePricesLegacyG: { small: 120, large: 400, estate: 50000 / 30 },
+  homeResaleRange: [0.7, 0.9],
+  homeRentLegacyG: 0.5,
+  scholarshipThresholds: { magic: 60, knight: 70, scholar: 70 },
+  scholarshipLivingCostLegacyG: 12,
+  scholarshipRepaymentRate: 0.1,
+  business: {
+    small: { cost: 8, chance: 0.6, revenue: 0.5 },
+    medium: { cost: 20, chance: 0.45, revenue: 1.2 },
+    large: { cost: 40, chance: 0.3, revenue: 2.5 },
+    skillAdjustmentMax: 0.1,
+    minimumChance: 0.2,
+    maximumChance: 0.7,
+    lossOnFailure: { small: 1, medium: 0.65, large: 0.4 },
+  },
+  sequelaRecovery: { cost: 40, chance: 0.35 },
   routineLogIntervalYears: 3.4,
   decisionMeanYears: 2.5,
   firstDecisionEarliestAge: 6,
