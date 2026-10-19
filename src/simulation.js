@@ -567,10 +567,6 @@ export function skillTier(skill) {
 
 function skillGrowthPlans(life) {
   const plans = new Map();
-  const occupationSkill = OCCUPATION_SKILLS[life.occupation];
-  if (life.trainingPlan && life.age >= 13 && occupationSkill && !NON_WORKING.includes(life.occupation)) {
-    plans.set(occupationSkill, { activity: 1, learning: 1 });
-  }
   for (const [skill, practice] of Object.entries(life.skillPractice ?? {})) {
     if (practice.activity > 0) plans.set(skill, practice);
   }
@@ -3213,7 +3209,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       life.age += elapsed;
       remaining -= elapsed;
       advanceOccupation(life, elapsed);
-      if (life.trainingPlan || Object.keys(life.skillPractice ?? {}).length > 0) advanceSkills(life, elapsed);
+      if (Object.keys(life.skillPractice ?? {}).length > 0) advanceSkills(life, elapsed);
       advanceNpcs(life, elapsed, random);
       life.finance ??= { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 };
       life.finance.monthProgress += elapsed * 12;

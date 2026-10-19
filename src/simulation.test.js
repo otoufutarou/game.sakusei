@@ -310,8 +310,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
       occupationYears: 0,
       skills: { teaching: 0 },
       skillTalents: { teaching: "普通" },
-      skillPractice: {},
-      trainingPlan: {},
+      skillPractice: { teaching: { activity: 1, learning: 1 } },
       skillMonthProgress: 0,
       skillHistory: [],
     });
@@ -379,8 +378,7 @@ test("race age multipliers normalize practice to human-equivalent years", () => 
       occupationRank: "初心者",
       skills: { teaching: 0 },
       skillTalents: { teaching: "普通" },
-      skillPractice: {},
-      trainingPlan: {},
+      skillPractice: { teaching: { activity: 1, learning: 1 } },
       skillMonthProgress: 0,
       skillHistory: [],
     });
@@ -408,8 +406,7 @@ test("skill tiers follow the specified ranges and remain separate from tenure", 
   const life = makeLife({ occupation: "教師", occupationSkill: 30, occupationYears: 21 });
   life.skills = { teaching: 30 };
   life.skillTalents = { teaching: "普通" };
-  life.skillPractice = {};
-  life.trainingPlan = {};
+  life.skillPractice = { teaching: { activity: 1, learning: 1 } };
   life.skillMonthProgress = 0;
   advanceSkills(life, 1);
   assert.equal(life.occupationYears, 21);
