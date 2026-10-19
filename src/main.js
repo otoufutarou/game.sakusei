@@ -7,7 +7,7 @@ import { clearSave, inspectSave, saveToStorage } from "./save.js";
 
 const BUILD_ID = "__BUILD_ID__";
 // Prevent the synchronous next-decision jump from running forever if the event scheduler fails to yield.
-const NEXT_DECISION_STEP_LIMIT = 1000;
+const NEXT_DECISION_STEP_LIMIT = 100;
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
