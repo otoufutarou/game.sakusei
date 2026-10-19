@@ -61,7 +61,6 @@ let lastSceneKey = null;
 let lastSaveAt = 0;
 let previousAbilityValues = {};
 const abilityChangeTimers = new WeakMap();
-let fastForwardToDecision = false;
 let currentDecisionId = null;
 let random = Math.random;
 
@@ -160,7 +159,6 @@ function resetView() {
     abilityChangeTimers.delete(changeNode);
     changeNode.textContent = "";
   }
-  fastForwardToDecision = false;
   currentDecisionId = null;
   elements.eventList.replaceChildren();
   addJournalEvents();
@@ -443,7 +441,6 @@ function showResult() {
 
 function showEnding() {
   if (life.active || elements.endingDialog.open) return;
-  fastForwardToDecision = false;
   clearSave();
   elements.endingCopy.textContent = `${life.name}は${life.nation.name}の${life.status?.name ?? ""}の家に生まれ、${formatAge({ ...life, age: life.deathAge })}の人生を歩みました。`;
   fillRecords(elements.endingRecord, [
@@ -506,17 +503,31 @@ function anyModalOpen() {
   return [elements.decisionDialog, elements.resultDialog, elements.endingDialog, elements.prologueDialog].some((dialog) => dialog.open);
 }
 
+function advanceToNextDecision() {
+  if (!life.active || life.pendingDecision) return;
+  life.playing = true;
+  let steps = 0;
+  while (life.active && !life.pendingDecision && steps < 1000) {
+    advanceLife(life, 0.25, random);
+    steps += 1;
+  }
+  addJournalEvents();
+  updateLifeDisplay();
+  updateControls();
+  if (life.pendingDecision) showDecision();
+  if (!life.active) showEnding();
+  save(true);
+}
+
 function tick(timestamp) {
   if (!lastTimestamp) lastTimestamp = timestamp;
   const elapsedSeconds = Math.min((timestamp - lastTimestamp) / 1000, 0.2);
   lastTimestamp = timestamp;
   if (life.active && life.playing && !anyModalOpen()) {
-    const speed = fastForwardToDecision ? 8 : life.speed;
-    advanceLife(life, elapsedSeconds * 0.1 * speed, random);
+    advanceLife(life, elapsedSeconds * 0.1 * life.speed, random);
     addJournalEvents();
     updateLifeDisplay();
     if (life.pendingDecision) {
-      fastForwardToDecision = false;
       showDecision();
     }
     if (!life.active) showEnding();
@@ -547,10 +558,7 @@ document.querySelectorAll("[data-close]").forEach((button) => button.addEventLis
 $("#close-result").addEventListener("click", () => elements.resultDialog.close());
 elements.next.addEventListener("click", () => {
   if (!life.active || life.pendingDecision) return;
-  life.playing = true;
-  fastForwardToDecision = true;
-  lastTimestamp = 0;
-  updateControls();
+  advanceToNextDecision();
 });
 document.querySelectorAll("[data-speed]").forEach((button) => {
   button.addEventListener("click", () => {

@@ -162,6 +162,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .choice-button strong { display: block; }
 .choice-button ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.choice-button li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .choice-button .reason { display: block; margin-top: 4px; color: var(--bad); font-size: 11px; }
 .result-list { margin: 0 0 4px; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 

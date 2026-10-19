@@ -74,7 +74,6 @@ export const TUNING = Object.freeze({
   socialMeanYears: 2.6,
   retirementHumanAge: 65,
   promotionSuccessChance: 0.25,
-  jobAcceptanceRates: [0.95, 0.8, 0.6, 0.25, 0.05],
   promotionRetryYears: 3,
   ordinaryDebtLimit: 100,
   childDecisionMaxHumanAge: 45,
@@ -1044,7 +1043,7 @@ function careerPreview(life, career) {
   const skill = Math.round(life.skills?.[career.skill] ?? 0);
   return [
     `月給: 約${salary.toFixed(1)}G`,
-    `必要技能: ${skillName(career.skill)}${career.minimum}+（現在${skill}）・${career.description}`,
+    `必要技能: ${skillName(career.skill)}${career.minimum}+（現在${skill}）`,
   ];
 }
 
@@ -1634,6 +1633,12 @@ const CHOICE_RULES = {
   work: {
     preview: () => ["費用: なし", `メリット: 所持金+${CHILDHOOD_CHOICE_REWARDS.workGold}G、仕事の技能+${CHILDHOOD_CHOICE_REWARDS.workSkill}`, "デメリット: 読み書きの学習は進まない"],
   },
+  "work-practice": {
+    preview: (life) => [`技能: ${skillName(OCCUPATION_SKILLS[life.occupation] ?? "general")} +1`, "職業を変えず、今の仕事の腕を磨く"],
+  },
+  steady: {
+    preview: (life) => [`月給: 約${monthlyBudget(life).income.work.toFixed(1)}G`, "職業を変えず、今の仕事を続ける"],
+  },
   mentor: {
     preview: () => ["費用: なし", `メリット: 指導技能+${CHILDHOOD_CHOICE_REWARDS.mentorTeaching}、名声+${CHILDHOOD_CHOICE_REWARDS.mentorFame}`, "デメリット: 所持金や職業技能は増えない"],
   },
@@ -1654,10 +1659,6 @@ const CHOICE_RULES = {
   },
   "edu-family-work": {
     preview: () => ["費用: なし", "成長する技能: 肉体労働・読み書き（独学）", "メリット: 家計を助けられる", "デメリット: 読み書きの習得が遅い"],
-  },
-  "edu-start-work": {
-    check: (life) => (life.age < 10 ? "まだ幼すぎて働けない" : null),
-    preview: () => ["費用: なし", "メリット: 早く収入を得られる", "デメリット: 教育を受ける機会を失う", "条件: 10歳以上"],
   },
   "apprentice-magic": {
     cost: 12,
@@ -1683,14 +1684,8 @@ const CHOICE_RULES = {
   "apprentice-family": {
     preview: () => ["費用: なし", "メリット: 家業を継ぐ準備ができる", "デメリット: 外の世界を知る機会が減る"],
   },
-  "apprentice-general": {
-    preview: () => ["費用: なし", "期間: 人間換算5年間", "良い師匠から職業技能を学ぶ", "見習いとして働きながら技術を身につける"],
-  },
   "path-academy": {
     preview: () => ["費用: なし", "入学条件を満たす学院の選考へ進む", "身分・適性・費用によって進学先が限られる"],
-  },
-  "apprentice-work": {
-    preview: () => ["費用: なし", "メリット: すぐに収入を得られる", "デメリット: 師匠や学院での指導は受けられない"],
   },
   "academy-magic": {
     cost: (life) => academyFunding(life, "magic").cost ?? 60,
@@ -2127,11 +2122,11 @@ export function availableChoiceEvents(life) {
 
 function decorateChoice(life, choice) {
   const rule = CHOICE_RULES[choice.effect] ?? CHOICE_RULES[choice.effect.split(":")[0]];
-  if (!rule) return { ...choice };
+  if (!rule) return { ...choice, preview: (choice.preview ?? []).slice(0, 2) };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
   const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
-  return { ...choice, cost, payer, preview: rule.preview?.(life, cost) ?? [], disabledReason };
+  return { ...choice, cost, payer, preview: (rule.preview?.(life, cost) ?? []).slice(0, 2), disabledReason };
 }
 
 export function choiceAvailability(life, effect) {
@@ -2157,7 +2152,7 @@ function buildDecision(life, event, random) {
     .map((choice) => ({
       ...choice,
       label: toGoldText(choice.label),
-      preview: (choice.preview ?? []).map(toGoldText),
+      preview: (choice.preview ?? []).slice(0, 2).map(toGoldText),
       disabledReason: choice.disabledReason ? toGoldText(choice.disabledReason) : null,
     }));
   decision.copy = toGoldText(decision.copy);
@@ -2224,15 +2219,15 @@ function decisionFor(life, random) {
       title: "進む道",
       copy: "将来について考える時が来ました。興味のある道を選んでみましょう。",
       choices: [
-        { label: "仕事の見習いを始める", effect: "apprentice" },
+        { label: "職業技能を磨く", effect: "work-practice" },
         { label: "学びを続けて備える", effect: "study" },
       ],
     },
     youngAdult: {
-      title: "新しい仕事の誘い",
-      copy: `知人から仕事の話が届きました。今の暮らしを変える機会かもしれません。`,
+      title: "仕事との向き合い方",
+      copy: "今の職業を続けるか、仕事の技能を磨くかを決めましょう。",
       choices: [
-        { label: "新しい仕事に挑戦する", effect: "career" },
+        { label: "職業技能を磨く", effect: "work-practice" },
         { label: "今の仕事を続ける", effect: "steady" },
       ],
     },
@@ -2380,14 +2375,6 @@ export function applyChoice(life, choice, random = Math.random) {
       addFlag(life, "retirement-choice-resolved");
       message = `${life.occupation}として働き続けることにした。再就職や転職の機会は今後もある。`;
       break;
-    case "retire-career-change": {
-      const previous = life.occupation;
-      const next = randomItem(["農作業", "商人", "教師", "工房主"], random);
-      changeOccupation(life, next, "65歳で別の仕事を選択");
-      addFlag(life, "retirement-choice-resolved");
-      message = `${previous}から${next}へ移り、新しい仕事を始めることにした。`;
-      break;
-    }
     case "promotion-apply": {
       const step = nextPromotionStep(life);
       if (!step) {
@@ -2460,6 +2447,9 @@ export function applyChoice(life, choice, random = Math.random) {
       life.graduationPending = false;
       life.graduationSkill = null;
       life.educationStatus = "就労";
+      if (effectType === "career-change" && life.age >= TUNING.retirementHumanAge) {
+        addFlag(life, "retirement-choice-resolved");
+      }
       const nextSalary = monthlyBudget(life).income.work;
       message = `${job}を選び、${previousJob}から移った。月給は約${previousSalary.toFixed(1)}Gから${nextSalary.toFixed(1)}Gになった。`;
       break;
@@ -2475,22 +2465,6 @@ export function applyChoice(life, choice, random = Math.random) {
       addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 1, "仕事への取り組み");
       message = `${occupationTitle(life)}の技能を1伸ばすことに集中した。`;
       break;
-    case "job-application": {
-      const [, tierText, job] = selected.effect.split(":");
-      const tier = Number(tierText);
-      const rate = TUNING.jobAcceptanceRates[tier - 1];
-      const previousJob = life.occupation;
-      const previousSalary = monthlyBudget(life).income.work;
-      if (random() < rate) {
-        changeOccupation(life, job, "求人への応募に採用");
-        const nextSalary = monthlyBudget(life).income.work;
-        message = `応募が採用され、${previousJob}から${job}へ移った。月収は約${gold(previousSalary)}から${gold(nextSalary)}になった。`;
-      } else {
-        message = `${job}の選考に落ち、${previousJob}を続けることになった（採用率${Math.round(rate * 100)}%）。`;
-      }
-      notes.push(`採用判定: 固定${Math.round(rate * 100)}%（能力・推薦による確率加算なし）`);
-      break;
-    }
     case "steady":
       message = `${life.occupation}の仕事と今の暮らしを続けることにした。`;
       break;
@@ -2797,11 +2771,6 @@ export function applyChoice(life, choice, random = Math.random) {
       message = "家の仕事を手伝いながら、合間に独学で読み書きを覚えることにした。";
       notes.push("職業: 家業の手伝い", "読み書きは独学（学習環境×0.6）");
       break;
-    case "edu-start-work":
-      changeOccupation(life, pickCareer(life, random), "教育を受けず働き始めた");
-      life.educationStatus = "教育を受けずに就労";
-      message = `教育は受けず、${life.occupation}として働き始めた。`;
-      break;
     case "apprentice-magic":
     case "apprentice-sword": {
       const magicPath = selected.effect === "apprentice-magic";
@@ -2843,28 +2812,6 @@ export function applyChoice(life, choice, random = Math.random) {
       changeOccupation(life, "家業の手伝い", "家業を継ぐ準備");
       life.educationStatus = "家業を継ぐ準備";
       message = "家業を手伝いながら、いずれ継ぐための仕事を覚え始めた。";
-      break;
-    case "apprentice-general": {
-      const occupation = randomItem(["職人見習い", "服飾店の見習い", "鍛冶職人"], random);
-      const skill = OCCUPATION_SKILLS[occupation];
-      const mentor = createNpc(life, random, {
-        relationship: "職業の師匠", humanAge: 35 + random() * 25,
-        occupation, affinity: 50, firstContact: "職業見習いとして受け入れた",
-      });
-      const quality = mentorQuality(random);
-      startTraining(life, random, {
-        kind: "apprenticeship", name: `${mentor.name}のもとでの${occupation}`,
-        skill, activity: 1, learning: quality.learning, years: 5, mentor,
-        status: `${occupation}として修業中`, occupation, occupationReason: "職業見習いを選択",
-      });
-      message = `${mentor.name}のもとで${occupation}として働きながら、技術を学ぶことにした。`;
-      notes.push(`修業期間: 人間換算5年間`, `学習環境×${quality.learning}`);
-      break;
-    }
-    case "apprentice-work":
-      changeOccupation(life, pickCareer(life, random), "弟子入りせず働き始めた");
-      life.educationStatus = "就労";
-      message = `弟子入りせず、${life.occupation}として働き始めた。`;
       break;
     case "academy-magic":
     case "academy-knight":
@@ -3225,6 +3172,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       life.age += elapsed;
       remaining -= elapsed;
       advanceOccupation(life, elapsed);
+      if (life.trainingPlan) advanceSkills(life, elapsed);
       advanceNpcs(life, elapsed, random);
       life.finance ??= { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 };
       life.finance.monthProgress += elapsed * 12;

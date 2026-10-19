@@ -223,10 +223,14 @@ function block(context, x, y, width, height, color, sx, sy) {
 }
 
 function drawTree(context, x, ground, size, palette, sx, sy) {
-  block(context, x + size * 0.42, ground - size * 0.52, size * 0.16, size * 0.52, "#604b35", sx, sy);
-  for (let row = 0; row < 4; row += 1) {
-    const span = size * (0.72 - row * 0.13);
-    block(context, x + (size - span) / 2, ground - size * (0.5 + row * 0.12), span, size * 0.15, row % 2 ? palette.leaf : palette.far, sx, sy);
+  block(context, x + size * 0.42, ground - size * 0.43, size * 0.16, size * 0.43, "#604b35", sx, sy);
+  block(context, x + size * 0.45, ground - size * 0.31, size * 0.05, size * 0.27, "#806044", sx, sy);
+  for (let row = 0; row < 5; row += 1) {
+    const span = size * (0.28 + row * 0.16);
+    const top = ground - size + row * size * 0.11;
+    const left = x + (size - span) / 2;
+    block(context, left, top, span, size * 0.17, palette.far, sx, sy);
+    block(context, left + span * 0.14, top + size * 0.04, span * 0.7, size * 0.1, palette.leaf, sx, sy);
   }
 }
 
