@@ -29,7 +29,7 @@ jobs:
           BUILD="${GITHUB_SHA::7}"
           mkdir -p _site/src
           cp index.html styles.css _site/
-          cp src/main.js src/simulation.js src/stats.js src/save.js src/character-sprite.js _site/src/
+          cp src/main.js src/simulation.js src/stats.js src/save.js src/character-sprite.js src/names.js _site/src/
           # Every internal module import and the entry-point assets get the same ?v= so modules stay single instances.
           sed -i -E "s#from \"\./([a-z-]+)\.js\"#from \"./\1.js?v=${BUILD}\"#" _site/src/*.js
           sed -i -E "s#(href|src)=\"\./(styles\.css|src/main\.js)\"#\1=\"./\2?v=${BUILD}\"#" _site/index.html
