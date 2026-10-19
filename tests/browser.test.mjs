@@ -29,7 +29,7 @@ function stamped(file) {
   if (file === "index.html") text = text.replace(/(href|src)="\.\/(styles\.css|src\/main\.js)"/g, `$1="./$2?v=${BUILD}"`);
   return text;
 }
-const allowed = new Set(["index.html", "styles.css", "src/main.js", "src/simulation.js", "src/stats.js", "src/save.js", "src/character-sprite.js"]);
+const allowed = new Set(["index.html", "styles.css", "src/main.js", "src/simulation.js", "src/stats.js", "src/save.js", "src/character-sprite.js", "src/names.js"]);
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   if (url.pathname.endsWith("/favicon.ico") || url.pathname === "/favicon.ico") { res.statusCode = 204; return res.end(); }
