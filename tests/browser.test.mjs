@@ -62,6 +62,7 @@ async function open(context, { legacySave } = {}) {
   if (legacySave !== undefined) await page.addInitScript((save) => { if (!localStorage.getItem("tomoshibi-save")) localStorage.setItem("tomoshibi-save", save); }, legacySave);
   await page.goto(`http://127.0.0.1:${port}${BASE}`);
   await page.waitForSelector("#prologue-dialog[open]");
+  assert.equal(await page.isVisible("#startup-error"), false, "startup warning stays hidden after successful initialization");
   return { page, problems };
 }
 

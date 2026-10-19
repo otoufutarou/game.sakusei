@@ -548,12 +548,13 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// Exposed for browser-side verification only.
-window.__game = { get life() { return life; }, openStatus, openMoney };
-
 addJournalEvents();
 updateLifeDisplay();
 updateControls();
 drawScene(true);
 showPrologue();
 requestAnimationFrame(tick);
+
+// Exposed for browser-side verification only.
+window.__game = { get life() { return life; }, openStatus, openMoney };
+$("#startup-error").hidden = true;
