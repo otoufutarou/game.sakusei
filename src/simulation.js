@@ -1868,34 +1868,34 @@ export const CHOICE_EVENTS = [
       custom: (life) => !NON_WORKING.includes(life.occupation) && !training(life)
         && !life.historyFlags?.includes("retirement-choice-resolved"),
     },
-    {
-      id: "choice-will", title: "遺言を残す", category: "財産・家族", weight: 0.65,
-      requirements: { minAge: 60, cooldownYears: 8 },
-      copy: "財産の行き先を決める遺言を無料で作成・変更できる。爵位や領地の継承先は変更できない。",
-      choicesFor: (life) => {
-        const spouse = spouseNpc(life);
-        const children = livingChildren(life);
-        const contacts = (life.npcs ?? []).filter((npc) => npc.alive && npc.id !== spouse?.id && !children.some((child) => child.id === npc.id));
-        return [
-          { label: "通常の相続にする", effect: "will-legal" },
-          ...(spouse ? [{ label: `${spouse.name}に全額`, effect: "will-spouse" }] : []),
-          ...(children.length ? [
-            { label: `${[...children].sort((a, b) => b.humanAge - a.humanAge)[0].name}に全額`, effect: "will-oldest-child" },
-            { label: "存命の子供全員に均等", effect: "will-equal-children" },
-          ] : []),
-          ...contacts.map((npc) => ({ label: `${npc.name}に全額を遺す`, effect: `will-person:${npc.id}` })),
-          { label: "教会へ寄付", effect: "will-charity:教会" },
-          { label: "慈善団体へ寄付", effect: "will-charity:慈善団体" },
-          { label: "国へ寄付", effect: "will-charity:国家" },
-        ];
-      },
-    },
     copy: "人間換算で65歳を迎えた。仕事を退くか、続けるか、別の道へ移るかを選べる。",
     choices: [
       { label: "今の仕事を退く", effect: "retire-now" },
       { label: "今の仕事を続ける", effect: "keep-working" },
       { label: "別の仕事へ移る", effect: "retire-career-change" },
     ],
+  },
+  {
+    id: "choice-will", title: "遺言を残す", category: "財産・家族", weight: 0.65,
+    requirements: { minAge: 60, cooldownYears: 8 },
+    copy: "財産の行き先を決める遺言を無料で作成・変更できる。爵位や領地の継承先は変更できない。",
+    choicesFor: (life) => {
+      const spouse = spouseNpc(life);
+      const children = livingChildren(life);
+      const contacts = (life.npcs ?? []).filter((npc) => npc.alive && npc.id !== spouse?.id && !children.some((child) => child.id === npc.id));
+      return [
+        { label: "通常の相続にする", effect: "will-legal" },
+        ...(spouse ? [{ label: `${spouse.name}に全額`, effect: "will-spouse" }] : []),
+        ...(children.length ? [
+          { label: `${[...children].sort((a, b) => b.humanAge - a.humanAge)[0].name}に全額`, effect: "will-oldest-child" },
+          { label: "存命の子供全員に均等", effect: "will-equal-children" },
+        ] : []),
+        ...contacts.map((npc) => ({ label: `${npc.name}に全額を遺す`, effect: `will-person:${npc.id}` })),
+        { label: "教会へ寄付", effect: "will-charity:教会" },
+        { label: "慈善団体へ寄付", effect: "will-charity:慈善団体" },
+        { label: "国へ寄付", effect: "will-charity:国家" },
+      ];
+    },
   },
   {
     id: "choice-promotion-offer", title: "昇進の打診", category: "職業・昇進", weight: 1, priority: true,
@@ -2069,7 +2069,7 @@ function buildDecision(life, event, random) {
     .map((choice) => ({
       ...choice,
       label: toSilverText(choice.label),
-      preview: choice.preview.map(toSilverText),
+      preview: (choice.preview ?? []).map(toSilverText),
       disabledReason: choice.disabledReason ? toSilverText(choice.disabledReason) : null,
     }));
   decision.copy = toSilverText(decision.copy);

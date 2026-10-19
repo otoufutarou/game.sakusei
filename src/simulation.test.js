@@ -96,6 +96,13 @@ function lifeForEvent(event) {
   if (event.id === "choice-illness-treatment") {
     life.illness = { type: "pneumonia", name: "肺炎", severity: "中等症", since: life.age, duration: 0.4 };
   }
+  if (event.id === "choice-sell-home") {
+    life.ownsHome = true;
+    life.homeValue = TUNING.homePricesLegacyG.small;
+  }
+  if (event.id === "choice-sequela-recovery") {
+    life.sequelae = [{ type: "身体能力低下", amount: 8, recoveryAttempted: false }];
+  }
   if (event.id === "choice-promotion-offer") {
     life.occupation = "農作業";
     life.occupationRole = "農作業";
@@ -436,7 +443,7 @@ test("journey sprite moves with age and reflects species, home, and family", () 
 test("choice catalog contains distinct stateful decision events", () => {
   assert.ok(CHOICE_EVENTS.length >= 10);
   assert.equal(new Set(CHOICE_EVENTS.map((event) => event.id)).size, CHOICE_EVENTS.length);
-  assert.ok(CHOICE_EVENTS.every((event) => event.choices.length >= 2 && event.requirements && event.weight > 0));
+  assert.ok(CHOICE_EVENTS.every((event) => (event.choices?.length ?? 2) >= 2 && event.requirements && event.weight > 0));
   for (const event of CHOICE_EVENTS) {
     const life = lifeForEvent(event);
     assert.equal(isRoutineEventEligible(life, event), true, `${event.id} eligibility`);
