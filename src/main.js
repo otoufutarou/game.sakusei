@@ -192,12 +192,17 @@ function updateControls() {
   const waiting = Boolean(life.pendingDecision);
   const ended = !life.active;
   const paused = !life.playing;
+  const nextStepLimited = life.nextDecisionLimitReached && !waiting && !ended;
   elements.play.disabled = ended || waiting || !life.started;
   elements.play.innerHTML = life.playing ? 'Ⅱ <span>一時停止</span>' : '▶ <span>再開</span>';
   elements.play.setAttribute("aria-label", life.playing ? "一時停止" : "再開");
   elements.next.disabled = ended || waiting || !life.started;
   elements.indicator.classList.toggle("paused", paused);
-  elements.indicator.innerHTML = `<i></i>${ended ? "人生の終わり" : waiting ? "選択待ち" : paused ? "一時停止" : "進行中"}`;
+  const indicatorLabel = ended ? "人生の終わり" : waiting ? "選択待ち" : nextStepLimited ? "次へで続行" : paused ? "一時停止" : "進行中";
+  elements.indicator.innerHTML = `<i></i>${indicatorLabel}`;
+  elements.indicator.setAttribute("aria-label", nextStepLimited
+    ? "安全上の上限まで進行しました。次の選択までをもう一度押すと続きます。"
+    : indicatorLabel);
   document.querySelectorAll("[data-speed]").forEach((button) => {
     const selected = Number(button.dataset.speed) === life.speed;
     button.classList.toggle("selected", selected);
@@ -507,12 +512,14 @@ function anyModalOpen() {
 
 function advanceToNextDecision() {
   if (!life.active || life.pendingDecision) return;
+  life.nextDecisionLimitReached = false;
   life.playing = true;
   let steps = 0;
   while (life.active && !life.pendingDecision && steps < NEXT_DECISION_STEP_LIMIT) {
     advanceLife(life, 0.25, random);
     steps += 1;
   }
+  life.nextDecisionLimitReached = life.active && !life.pendingDecision && steps >= NEXT_DECISION_STEP_LIMIT;
   life.playing = false;
   addJournalEvents();
   updateLifeDisplay();
@@ -550,6 +557,7 @@ function startNewLife() {
 elements.play.addEventListener("click", () => {
   if (!life.active || life.pendingDecision) return;
   life.playing = !life.playing;
+  life.nextDecisionLimitReached = false;
   lastTimestamp = 0;
   updateControls();
   save(true);

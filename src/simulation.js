@@ -890,16 +890,7 @@ const WORLD_END_TEXT = Object.freeze({
 
 function applyWorldOnset(life, situation, random) {
   const impacts = [];
-  if (situation === "戦争中") {
-    if (life.occupation === "兵士") {
-      impacts.push("兵士として戦地へ送られる危険が高まった");
-    } else if (life.age >= 18 && life.age < 45) {
-      impacts.push("若い住民にも守備隊への協力が呼びかけられている");
-    }
-    if (life.occupation === "商人") impacts.push("軍需で商人の取引が増えた");
-    if (life.occupation === "冒険者") impacts.push("護衛や討伐の依頼が増えた");
-    if (life.occupation === "農作業") impacts.push("食料の徴発で収穫の取り分が減った");
-  } else if (situation === "疫病流行") {
+  if (situation === "疫病流行") {
     impacts.push("病気にかかりやすくなり、親しい人の安否も気がかりだ");
   } else if (situation === "飢饉") {
     impacts.push("生活費が大きく増えた");
@@ -1642,7 +1633,7 @@ const CHOICE_RULES = {
     preview: (life) => [`技能: ${skillName(OCCUPATION_SKILLS[life.occupation] ?? "general")} +1`, "職業を変えず、今の仕事の腕を磨く"],
   },
   steady: {
-    preview: (life) => [`月給: 約${monthlyBudget(life).income.work.toFixed(1)}G`, "職業を変えず、今の仕事を続ける"],
+    preview: () => ["費用: なし", "今の暮らしを続ける"],
   },
   mentor: {
     preview: () => ["費用: なし", `メリット: 指導技能+${CHILDHOOD_CHOICE_REWARDS.mentorTeaching}、名声+${CHILDHOOD_CHOICE_REWARDS.mentorFame}`, "デメリット: 所持金や職業技能は増えない"],
@@ -1917,7 +1908,7 @@ export const CHOICE_EVENTS = [
     copy: "仕事の取り組み方を見直す機会が訪れた。技能を磨くか、今の働き方を続けるか選べる。",
     choices: [
       { label: "職業技能を磨く", effect: "work-practice" },
-      { label: "今の仕事を続ける", effect: "steady" },
+      { label: "今の仕事を続ける", effect: "steady", preview: ["費用: なし", "今の技能と働き方を維持する"] },
     ],
   },
   {
@@ -1936,7 +1927,7 @@ export const CHOICE_EVENTS = [
     id: "choice-repay-debt", title: "借金の返済", category: "財産・借金", weight: 1.2,
     requirements: { minAge: 18, minimumGold: 10, custom: (life) => life.debt >= 5, cooldownYears: 4 },
     copy: "まとまった手持ちができた。借金が利息を生み続けている。",
-    choices: [{ label: "手持ちで借金を返す", effect: "repay-debt" }, { label: "返済は毎月の分だけにする", effect: "steady" }],
+    choices: [{ label: "手持ちで借金を返す", effect: "repay-debt" }, { label: "返済は毎月の分だけにする", effect: "steady", preview: ["追加費用: なし", "決まった月々の返済を続ける"] }],
   },
   {
     id: "choice-buy-home", title: "家を持つ", category: "財産・借金", weight: 0.9,
@@ -1953,13 +1944,13 @@ export const CHOICE_EVENTS = [
     id: "choice-sell-home", title: "住まいを売る", category: "財産・借金", weight: 0.4,
     requirements: { minAge: 25, custom: (life) => Boolean(life.ownsHome), cooldownYears: 8 },
     copy: "家の維持費はかからないが、まとまった資金が必要なら売却できる。",
-    choices: [{ label: "家を売る", effect: "sell-home" }, { label: "今の家に住み続ける", effect: "steady" }],
+    choices: [{ label: "家を売る", effect: "sell-home" }, { label: "今の家に住み続ける", effect: "steady", preview: ["費用: なし", "家を売らず、住み続ける"] }],
   },
   {
     id: "choice-open-shop", title: "自分の工房を開く", category: "職業・昇進", weight: 0.9,
     requirements: { minAge: 25, minimumGold: 30, minimumSkill: 50, occupations: CRAFT_OCCUPATIONS, oncePerLife: true },
     copy: "腕に自信がつき、独立の話が出た。工房を借りるには30Gが要る。",
-    choices: [{ label: "30Gで工房を開く", effect: "open-shop-choice" }, { label: "親方のもとで働き続ける", effect: "steady" }],
+    choices: [{ label: "30Gで工房を開く", effect: "open-shop-choice" }, { label: "親方のもとで働き続ける", effect: "steady", preview: ["費用: なし", "親方のもとで働き続ける"] }],
   },
   {
     id: "choice-retirement", title: "これからの働き方", category: "職業・昇進", weight: 1, priority: true,
@@ -2020,14 +2011,14 @@ export const CHOICE_EVENTS = [
       { label: `小規模（${gold(TUNING.business.small.cost)}）`, effect: "business-expand:small" },
       { label: `中規模（${gold(TUNING.business.medium.cost)}）`, effect: "business-expand:medium" },
       { label: `大規模（${gold(TUNING.business.large.cost)}）`, effect: "business-expand:large" },
-      { label: "今回は見送る", effect: "steady" },
+      { label: "今回は見送る", effect: "steady", preview: ["費用: なし", "投資を見送り、現在の商売を続ける"] },
     ],
   },
   {
     id: "choice-buy-gear", title: "装備を新調する", category: "財産・借金", weight: 0.9,
     requirements: { minAge: 18, minimumGold: 10, occupations: ["兵士", "冒険者"], requiresNotFlag: "good-gear" },
     copy: "武器や防具が傷んできた。新しい装備を整えるか、今あるもので凌ぐか。",
-    choices: [{ label: "10Gで装備を整える", effect: "buy-gear" }, { label: "今の装備を使い続ける", effect: "steady" }],
+    choices: [{ label: "10Gで装備を整える", effect: "buy-gear" }, { label: "今の装備を使い続ける", effect: "steady", preview: ["費用: なし", "今の装備を使い続ける"] }],
   },
   {
     id: "choice-support-family", title: "家族への仕送り", category: "家族・人間関係", weight: 0.8,
@@ -2113,7 +2104,7 @@ export const CHOICE_EVENTS = [
     copy: "残った後遺症を専門治療で回復できる可能性がある。後遺症ごとに挑戦は一度だけ。",
     choices: [
       { label: "専門治療を受ける", effect: "sequela-recovery" },
-      { label: "今の状態を受け入れる", effect: "steady" },
+      { label: "今の状態を受け入れる", effect: "steady", preview: ["費用: なし", "後遺症を受け入れ、治療はしない"] },
     ],
   },
   {
@@ -2160,13 +2151,14 @@ export function compactChoicePreview(preview) {
   return [primary, selectedDetails.join("／")].filter(Boolean);
 }
 
-function decorateChoice(life, choice) {
+export function decorateChoice(life, choice) {
   const rule = CHOICE_RULES[choice.effect] ?? CHOICE_RULES[choice.effect.split(":")[0]];
   if (!rule) return { ...choice, preview: compactChoicePreview(choice.preview) };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
   const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
-  return { ...choice, cost, payer, preview: compactChoicePreview(rule.preview?.(life, cost)), disabledReason };
+  const preview = choice.preview?.length ? choice.preview : rule.preview?.(life, cost);
+  return { ...choice, cost, payer, preview: compactChoicePreview(preview), disabledReason };
 }
 
 export function choiceAvailability(life, effect) {
@@ -2483,9 +2475,12 @@ export function applyChoice(life, choice, random = Math.random) {
     case "career-graduate": {
       const [, job] = selected.effect.split(":");
       const career = CAREER_CATALOG.find((item) => item.occupation === job);
-      if (!career || !careerQualified(life, career)
-        || (effectType !== "career-graduate" && job === life.occupation)) {
+      if (!career || !careerQualified(life, career)) {
         message = "必要な適性や技能を満たしていないため、その職業には就けなかった。";
+        break;
+      }
+      if (effectType !== "career-graduate" && job === life.occupation) {
+        message = `すでに${job}として働いているため、転職は行わなかった。`;
         break;
       }
       const previousJob = life.occupation;

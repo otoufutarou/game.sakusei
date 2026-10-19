@@ -137,11 +137,12 @@ export function migrateLife(data) {
     life.journal = migrateLegacyCurrencyText(life.journal);
     life.lastResult = migrateLegacyCurrencyText(life.lastResult);
   }
-  if (life.ownsHome && !life.homeType) {
-    life.homeType = "small";
-    life.homeValue = TUNING.homePricesLegacyG.small;
+  if (life.ownsHome) {
+    life.homeType ??= "small";
+    if (!life.homeValue || (migrateSilverText && life.homeType === "small" && life.homeValue < TUNING.homePricesLegacyG.small)) {
+      life.homeValue = TUNING.homePricesLegacyG.small;
+    }
   }
-  if (life.ownsHome && !life.homeValue) life.homeValue = TUNING.homePricesLegacyG.small;
   life.will ??= { type: "legal", targetId: null, charity: null };
   return life;
 }

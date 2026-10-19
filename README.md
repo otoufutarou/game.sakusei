@@ -39,7 +39,7 @@ Initial adjustable values are in `TUNING` in `src/simulation.js`. Child-concepti
 
 #### Additional prototype values and boundaries
 
-- **Currency:** balances, wages, and prices are shown directly in G. Existing saved numeric balances remain unchanged, and old saved logs that showed silver are converted to G on load.
+- **Currency:** balances, wages, and prices are shown directly in G. Existing saved numeric balances remain unchanged; old silver-denominated log text is converted on older saves and rounded to two decimal places.
 - **Homes:** small/large/estate purchase prices are 120/400/1,666⅔ G; sale returns a random 70–90% of the recorded price. Home value is included in the death estate as if liquidated. No ownership maintenance charge is currently applied. Rent remains 0.7 G/month.
 - **Scholarships:** if the applicant meets normal admission rules, has less cash than tuition, and meets the relevant aptitude threshold (magic 60 mana, knight 70 combat, academic 70 intellect), the prototype lends the tuition total plus 12 G per course year. It is interest-free and separate from normal debt. Repayment is 10% of income only when basic expenses and ordinary scheduled debt repayment leave enough cash; no income/shortfall means no repayment. These course costs and living allowances are provisional.
 - **Business expansion:** farm and trade businesses may make at most three investments, with a four-year offer cooldown. Small/medium/large costs are 8/20/40 G and base success rates 60/45/30%; failure loses 100/65/40% of the stake. Success adds 0.25/0.6/1.2 G to monthly income, which is affected by economic conditions. Relevant skill adjusts chance by at most ±10 percentage points (overall cap 20–70%); base odds are configurable.

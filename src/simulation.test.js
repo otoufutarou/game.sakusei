@@ -17,6 +17,7 @@ import {
   monthlyBudget,
   occupationTitle,
   applyRoutineEffect,
+  decorateChoice,
   createLife,
   isRoutineEventEligible,
   skillGrowthDelta,
@@ -446,6 +447,24 @@ test("stale career choices cannot assign an unqualified or unknown occupation", 
   life.pendingDecision = { id: "unknown-career-choice", choices: [{ effect: "career-start:未知の職業" }] };
   applyChoice(life, { effect: "career-start:未知の職業" }, () => 0);
   assert.equal(life.occupation, "職人見習い");
+  const alreadyWorking = makeLife({
+    age: 20,
+    occupation: "農作業",
+    skills: { farming: 5 },
+    pendingDecision: { id: "duplicate-career-choice", choices: [{ effect: "career-change:農作業" }] },
+  });
+  applyChoice(alreadyWorking, { effect: "career-change:農作業" }, () => 0);
+  assert.match(alreadyWorking.lastResult.message, /すでに農作業として働いている/);
+});
+
+test("steady previews preserve choice-specific context and use a neutral fallback", () => {
+  const life = makeLife();
+  const jobOfferSteady = decorateChoice(life, {
+    effect: "steady",
+    preview: ["月給: 現在の職業を継続", "転職せず、今の仕事に取り組む"],
+  });
+  assert.deepEqual(jobOfferSteady.preview, ["月給: 現在の職業を継続", "転職せず、今の仕事に取り組む"]);
+  assert.deepEqual(decorateChoice(life, { effect: "steady" }).preview, ["費用: なし", "今の暮らしを続ける"]);
 });
 
 test("choosing a magic mentor creates a persistent contact and ongoing skill practice", () => {
@@ -1318,14 +1337,16 @@ test("widowhood, divorce, and remarriage keep state consistent", () => {
   assert.equal(life.npcs.find((npc) => npc.id === "spouse-2").maritalStatus, "離別");
 });
 
-test("world situations change state (war conscripts soldiers, plague raises danger, prices rise)", () => {
+test("war and plague adjust prices and income, and the world situation evolves", () => {
   const { life, random } = adultLife(12, { occupation: "兵士", gold: 30 });
   life.world = { situation: "平和", since: life.age, nextChangeAt: life.age + 0.1 };
-  const peaceIncome = monthlyBudget(life).income.work;
-  life.world.situation = "戦争中";
-  assert.ok(monthlyBudget(life).expenses.living > monthlyBudget({ ...life, world: { situation: "平和" } }).expenses.living, "war raises prices");
-  life.world.situation = "疫病流行";
-  assert.ok(monthlyBudget(life).income.work !== peaceIncome || true);
+  const peacefulBudget = monthlyBudget(life);
+  const warBudget = monthlyBudget({ ...life, world: { situation: "戦争中" } });
+  assert.ok(warBudget.expenses.living > peacefulBudget.expenses.living, "war raises prices");
+  assert.ok(warBudget.income.work > peacefulBudget.income.work, "war slightly raises soldiers' wages");
+  const plagueBudget = monthlyBudget({ ...life, world: { situation: "疫病流行" } });
+  assert.ok(plagueBudget.expenses.living > peacefulBudget.expenses.living);
+  assert.ok(plagueBudget.income.work < peacefulBudget.income.work);
   let changed = false;
   life.world = { situation: "平和", since: life.age, nextChangeAt: life.age };
   for (let step = 0; step < 400 && !changed; step += 1) {
@@ -1363,7 +1384,8 @@ test("save/load round-trips a life and migrates old saves without inventing hist
   assert.equal(migrated.statsEstimated, true);
   assert.equal(migrated.journal.length, 1);
   const legacyHome = migrateLife({
-    name: "旧所有者", race: "human", nation: "kingdom", age: 30, ownsHome: true, journal: [],
+    name: "旧所有者", race: "human", nation: "kingdom", age: 30, saveVersion: SAVE_VERSION - 1,
+    ownsHome: true, homeType: "small", homeValue: 40, journal: [],
   });
   assert.equal(legacyHome.homeValue, TUNING.homePricesLegacyG.small);
   const oldTrying = migrateLife({
