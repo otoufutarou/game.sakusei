@@ -25,6 +25,7 @@ const elements = {
   gold: $("#gold-value"),
   health: $("#health-value"),
   people: $("#people-value"),
+  abilityRows: new Map([...document.querySelectorAll("[data-stat-key]")].map((row) => [row.dataset.statKey, row])),
   eventCount: $("#event-count"),
   eventList: $("#event-list"),
   historyPage: $("#history-page"),
@@ -58,6 +59,8 @@ let renderedEventCount = 0;
 let lastTimestamp = 0;
 let lastSceneKey = null;
 let lastSaveAt = 0;
+let previousAbilityValues = {};
+const abilityChangeTimers = new WeakMap();
 let fastForwardToDecision = false;
 let currentDecisionId = null;
 let random = Math.random;
@@ -149,6 +152,14 @@ function resetView() {
   renderedEventCount = -1;
   lastTimestamp = 0;
   lastSceneKey = null;
+  previousAbilityValues = {};
+  for (const row of elements.abilityRows.values()) {
+    const changeNode = row.querySelector("[data-stat-change]");
+    const timer = abilityChangeTimers.get(changeNode);
+    if (timer !== undefined) clearTimeout(timer);
+    abilityChangeTimers.delete(changeNode);
+    changeNode.textContent = "";
+  }
   fastForwardToDecision = false;
   currentDecisionId = null;
   elements.eventList.replaceChildren();
@@ -230,6 +241,42 @@ function updateLifeDisplay() {
     ? `${life.illness.name}・${life.illness.severity}`
     : life.health;
   elements.people.textContent = familySummary();
+  updateBaseAbilities(currentStats(life));
+}
+
+function updateBaseAbilities(stats) {
+  for (const key of STAT_KEYS) {
+    const row = elements.abilityRows.get(key);
+    if (!row) continue;
+    const value = Math.round(stats[key]);
+    const ariaValue = Math.min(200, Math.max(0, value));
+    const valueNode = row.querySelector("[data-stat-value]");
+    const changeNode = row.querySelector("[data-stat-change]");
+    const track = row.querySelector(".ability-track");
+    const percentage = Math.min(100, Math.max(0, (stats[key] / 200) * 100));
+    valueNode.textContent = String(value);
+    track.setAttribute("aria-valuenow", String(ariaValue));
+    track.setAttribute("aria-valuetext", String(value));
+    track.firstElementChild.style.width = `${percentage}%`;
+
+    const previous = previousAbilityValues[key];
+    if (previous !== undefined && previous !== value) {
+      const delta = value - previous;
+      const text = `${delta > 0 ? "+" : "−"}${Math.abs(delta)}`;
+      const changeId = Number(changeNode.dataset.changeId ?? 0) + 1;
+      changeNode.dataset.changeId = String(changeId);
+      changeNode.textContent = text;
+      changeNode.classList.toggle("decrease", delta < 0);
+      const previousTimer = abilityChangeTimers.get(changeNode);
+      if (previousTimer !== undefined) clearTimeout(previousTimer);
+      const timer = setTimeout(() => {
+        if (changeNode.dataset.changeId === String(changeId)) changeNode.textContent = "";
+        abilityChangeTimers.delete(changeNode);
+      }, 1800);
+      abilityChangeTimers.set(changeNode, timer);
+    }
+    previousAbilityValues[key] = value;
+  }
 }
 
 // --------------------------------------------------------------- dialogs

@@ -65,6 +65,47 @@
             </div>
           </div>
         </section>
+        <section class="log-card" aria-labelledby="journal-heading">
+          <div class="log-head">
+            <h2 id="journal-heading">最近の出来事</h2>
+            <span class="log-count"><span id="event-count">0</span> 件</span>
+          </div>
+          <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
+          <button class="link-button" id="open-history-inline" type="button">過去の記録をすべて見る ›</button>
+        </section>
+        <section class="ability-panel" aria-labelledby="ability-heading">
+          <header class="ability-heading">
+            <h2 id="ability-heading">基礎能力</h2>
+            <span>現在値</span>
+          </header>
+          <div class="ability-bars" id="ability-bars">
+            <div class="ability-row" data-stat-key="body">
+              <div class="ability-label"><span>身体能力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="身体能力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            </div>
+            <div class="ability-row" data-stat-key="combat">
+              <div class="ability-label"><span>戦闘基礎能力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="戦闘基礎能力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            </div>
+            <div class="ability-row" data-stat-key="intellect">
+              <div class="ability-label"><span>知力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="知力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            </div>
+            <div class="ability-row" data-stat-key="dexterity">
+              <div class="ability-label"><span>器用さ</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="器用さ" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            </div>
+            <div class="ability-row" data-stat-key="charm">
+              <div class="ability-label"><span>魅力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="魅力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            </div>
+            <div class="ability-row" data-stat-key="luck">
+              <div class="ability-label"><span>運</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="運" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            </div>
+          </div>
+          <p class="ability-note">棒の長さは0〜200を基準に表示しています。</p>
+        </section>
         <div class="character-scene" data-region="kingdom">
           <canvas id="character-canvas" width="400" height="150" role="img" aria-label="人生の道を歩む主人公のドット絵"></canvas>
           <span class="scene-caption" id="scene-caption"></span>
@@ -76,15 +117,6 @@
         </div>
         <p class="family-line" id="people-value">家族</p>
         <button class="link-button" id="open-status-2" type="button">詳細ステータス ›</button>
-      </section>
-
-      <section class="log-card" aria-labelledby="journal-heading">
-        <div class="log-head">
-          <h2 id="journal-heading">最近の出来事</h2>
-          <span class="log-count"><span id="event-count">0</span> 件</span>
-        </div>
-        <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
-        <button class="link-button" id="open-history-inline" type="button">過去の記録をすべて見る ›</button>
       </section>
 
       <footer class="build-line"><span id="build-id">build: dev</span></footer>

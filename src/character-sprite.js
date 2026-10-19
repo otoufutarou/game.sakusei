@@ -379,7 +379,8 @@ export function drawJourney(context, sprite, { life } = {}) {
   const baseline = height * (ground + 5) / 150;
   const scale = Math.max(1, Math.min(2, Math.floor(height / 70)));
   const household = [];
-  if (age < 12 && life.active !== false && life.parents) {
+  const showingParents = age < 12 && life.active !== false && life.parents;
+  if (showingParents) {
     household.push(
       { name: `guardian-${life.name}-father`, age: 36, gender: "男性", occupation: life.parents.father, race: life.race?.id },
       { name: `guardian-${life.name}-mother`, age: 34, gender: "女性", occupation: life.parents.mother, race: life.race?.id },
@@ -392,9 +393,9 @@ export function drawJourney(context, sprite, { life } = {}) {
   const shown = life.active === false ? [] : household.slice(0, 4);
   shown.forEach((person, index) => {
     const side = index % 2 === 0 ? -1 : 1;
-    const distance = 20 + Math.floor(index / 2) * 19;
-    const personX = Math.max(11, Math.min(width - 11, x + side * distance));
-    drawPerson(context, spriteSpec(person), personX, baseline, 1);
+    const distance = (showingParents ? 34 : 20) + Math.floor(index / 2) * 19;
+    const personX = Math.max(showingParents ? 24 : 11, Math.min(width - 11, x + side * distance));
+    drawPerson(context, spriteSpec(person), personX, baseline, showingParents ? scale : 1);
   });
   if (life.active !== false) {
     drawPerson(context, buildHeroSpec(life), x, baseline, scale);

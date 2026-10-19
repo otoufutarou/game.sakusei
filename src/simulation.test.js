@@ -488,6 +488,16 @@ test("journey sprite moves with age and reflects species, home, and family", () 
   });
   const newborn = makeContext();
   drawJourney(newborn, characterSprite, { life: humanLife, frame: 0 });
+  const childWithParents = makeLife({
+    age: 5,
+    parents: { father: "兵士", mother: "仕立て屋" },
+    appearance: { hair: "#34271f", coat: "#647d72" },
+  });
+  const parentsScene = makeContext();
+  parentsScene.canvas.height = 150;
+  drawJourney(parentsScene, characterSprite, { life: childWithParents });
+  assert.ok(Math.max(...parentsScene.pixels.filter((pixel) => pixel[4] === "#657491").map((pixel) => pixel[2])) >= 18,
+    "parents are drawn at the hero's pixel scale rather than half size");
   humanLife.age = 40;
   const adult = makeContext();
   drawJourney(adult, characterSprite, { life: humanLife, frame: 1 });
@@ -534,6 +544,51 @@ test("choice catalog contains distinct stateful decision events", () => {
     assert.equal(isRoutineEventEligible(life, event), true, `${event.id} eligibility`);
     assert.ok(availableChoiceEvents(life).includes(event), `${event.id} decision pool`);
   }
+});
+
+test("school fallback is informative, meaningful, and presented only once", () => {
+  const life = createLife(() => 0.5);
+  life.age = 9;
+  life.maxHumanAge = 80;
+  life.playing = true;
+  life.nextDecisionAt = life.age;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  life.eventHistory.push({ id: "edu-childhood", age: 6 });
+
+  advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision.title, "これからの学び");
+  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.some((line) => line.startsWith("メリット:"))
+    && choice.preview.some((line) => line.startsWith("デメリット:"))));
+  const fame = life.fame;
+  const skill = life.skills.literacy ?? 0;
+  applyChoice(life, { effect: "study" }, () => 0.5);
+  assert.equal(life.fame, fame);
+  assert.ok(life.skills.literacy > skill, "studying grants literacy rather than fame");
+
+  life.nextDecisionAt = life.age;
+  advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision, null, "the resolved school fallback is not presented again");
+  assert.equal(life.eventHistory.filter((event) => event.id === "choice-fallback-school").length, 1);
+});
+
+test("fallback alternatives have distinct mechanical outcomes", () => {
+  const worker = makeLife({ age: 10, gold: 3, skills: {}, baseStats: {} });
+  decide(worker, "work", () => 0.5);
+  assert.equal(worker.gold, 5);
+  assert.equal(Object.values(worker.skills).reduce((sum, value) => sum + value, 0), 2);
+  assert.equal(worker.fame, 0);
+
+  const mentor = makeLife({ skills: {}, baseStats: {} });
+  decide(mentor, "mentor", () => 0.5);
+  assert.equal(mentor.skills.teaching, 3);
+  assert.equal(mentor.fame, 2);
+
+  const resting = makeLife({ health: "療養中", illness: null, skills: {}, baseStats: {} });
+  decide(resting, "rest", () => 0.5);
+  assert.equal(resting.health, "健やか");
+  assert.ok(resting.relationships.some((relationship) => relationship.type === "family-support"));
+  assert.equal(resting.fame, 0);
 });
 
 test("one hundred human lives produce varied logs without immediate repeats", () => {
@@ -663,24 +718,98 @@ test("choosing a mage apprenticeship persists the mentor, trains the skill, keep
   assert.ok(life.skills.magic > 0 && occupationTitle(life).length > 0);
 });
 
-test("academies check funds, status and talent instead of accepting everyone", () => {
+test("academies check family funds, scholarships, status and talent", () => {
   const { life } = adultLife(4, { age: 15, gold: 1, status: { name: "農民・労働者" } });
   life.mana = 5;
   assert.ok(choiceAvailability(life, "academy-magic").disabledReason);
   life.mana = 90;
   assert.equal(choiceAvailability(life, "academy-magic").disabledReason, null, "a strong talent earns a scholarship");
   assert.equal(choiceAvailability(life, "academy-magic").cost, 0);
+  life.parents.gold = 100;
+  life.mana = 25;
+  const familyFunded = choiceAvailability(life, "academy-magic");
+  assert.equal(familyFunded.disabledReason, null);
+  assert.equal(familyFunded.payer, "parents");
+  assert.equal(familyFunded.cost, 60);
   const noble = adultLife(4, { age: 15, gold: 1, status: { name: "貴族" } }).life;
   assert.equal(choiceAvailability(noble, "academy-knight").disabledReason, null);
+  assert.equal(choiceAvailability(noble, "academy-knight").payer, "player", "noble family funding is not charged to a missing parent balance");
 });
 
-test("basic schooling is free and the adolescent route has three distinct paths", () => {
+test("primary education uses parental funds and keeps its preview to two lines", () => {
   const { life } = adultLife(29, { age: 8, gold: 0 });
-  assert.equal(choiceAvailability(life, "edu-town-school").cost, 0);
-  decide(life, "edu-town-school", () => 0.9);
+  life.parents.gold = 10;
+  assert.equal(choiceAvailability(life, "edu-town-school").cost, 4);
+  assert.equal(choiceAvailability(life, "edu-town-school").payer, "parents");
+  assert.equal(choiceAvailability(life, "edu-tutor").cost, 12);
+  assert.ok(choiceAvailability(life, "edu-tutor").disabledReason, "the family's resources still gate the more expensive tutor");
+  life.playing = true;
+  life.nextDecisionAt = life.age;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  advanceLife(life, 0.25, () => 0.9);
+  assert.equal(life.pendingDecision.title, "学びのはじまり");
+  assert.ok(life.pendingDecision.choices.filter((choice) => ["edu-town-school", "edu-tutor"].includes(choice.effect))
+    .every((choice) => choice.preview.length === 2));
+  assert.deepEqual(life.pendingDecision.choices.find((choice) => choice.effect === "edu-town-school").preview, [
+    "費用: 親の財産から120銀貨",
+    "メリット: 読み書きの基礎を4年間学ぶ／デメリット: 家族の蓄えを使う",
+  ]);
+  applyChoice(life, { effect: "edu-town-school" }, () => 0.9);
+  assert.equal(life.parents.gold, 6);
+  assert.equal(life.gold, 0, "tuition is not taken from the child's empty wallet");
   assert.equal(life.trainingEndsAt, 12, "the basic school course lasts four human-equivalent years");
+  assert.ok(life.lastResult.details.some((line) => line.includes("親の財産-")));
   const route = CHOICE_EVENTS.find((event) => event.id === "edu-apprenticeship");
   assert.equal(route.choices.length, 3);
+});
+
+test("friend inheritance is represented by one equal-share option", () => {
+  const event = CHOICE_EVENTS.find((item) => item.id === "choice-will");
+  const { life } = adultLife(44, { age: 60 });
+  life.npcs = [
+    { id: "friend-1", name: "友人一", alive: true, relationship: "友人" },
+    { id: "friend-2", name: "友人二", alive: true, relationship: "友人" },
+    { id: "acquaintance", name: "知人", alive: true, relationship: "知人" },
+  ];
+  const choices = event.choicesFor(life);
+  assert.equal(choices.filter((choice) => choice.effect === "will-friends-equal").length, 1);
+  assert.equal(choices.some((choice) => choice.effect === "will-person:friend-1" || choice.effect === "will-person:friend-2"), false);
+  assert.ok(choices.some((choice) => choice.effect === "will-person:acquaintance"), "other named contacts remain selectable");
+});
+
+test("a grouped friend inheritance is shared equally among living friends", () => {
+  const { life } = adultLife(47, { age: 60, gold: 90 });
+  life.npcs = [
+    { id: "friend-1", name: "友人一", alive: true, relationship: "友人" },
+    { id: "friend-2", name: "友人二", alive: true, relationship: "友人" },
+  ];
+  decide(life, "will-friends-equal", () => 0.5);
+  life.age = life.maxHumanAge - 0.01;
+  life.nextDecisionAt = Infinity;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  life.world.nextChangeAt = Infinity;
+  advanceLife(life, 0.25, () => 0.99);
+  assert.deepEqual(life.inheritance.map((heir) => [heir.id, heir.amount]), [["friend-1", 45], ["friend-2", 45]]);
+});
+
+test("steady living does not create money and deliberate saving yields only a small reserve", () => {
+  const { life, random } = adultLife(45, { gold: 20 });
+  decide(life, "steady", random);
+  assert.equal(life.gold, 20);
+  decide(life, "save", random);
+  assert.equal(life.gold, 21);
+});
+
+test("ordinary wage cash flow leaves only a small monthly shortfall", () => {
+  const farmer = adultLife(46, { occupation: "農作業", occupationRole: "農作業", occupationSkill: 0, occupationYears: 0 }).life;
+  farmer.world = { situation: "平和" };
+  const budget = monthlyBudget(farmer);
+  assert.equal(budget.income.work, 3 * TUNING.wageMultiplier);
+  assert.equal(budget.expenses.living, TUNING.adultLivingCostLegacyG);
+  assert.equal(budget.expenses.rent, TUNING.homeRentLegacyG);
+  assert.ok(budget.net < 0 && budget.net > -0.25, "an ordinary farmer's monthly cash flow has a small shortfall");
 });
 
 test("spending reduces gold, is recorded in the ledger, and unaffordable choices cannot be applied", () => {
@@ -897,12 +1026,14 @@ test("eligible low-income academy applicants receive an interest-free repayable 
   const { life } = adultLife(31, {
     age: 15, gold: 0, status: { name: "都市平民" }, mana: 60,
     skills: { magic: 0 }, skillTalents: { magic: "普通" },
+    parents: { father: "農夫", mother: "薬師", gold: 0, debt: 0 },
   });
   decide(life, "academy-magic", () => 0.5);
   assert.equal(life.scholarshipBalance, 60 + 6 * TUNING.scholarshipLivingCostLegacyG);
   assert.equal(life.debt, 0, "education loans are tracked separately from ordinary debt");
   life.age = 30;
   life.occupation = "教師";
+  life.occupationRole = "主任教師";
   assert.ok(monthlyBudget(life).scholarshipRepayment > 0);
   life.occupation = "引退";
   assert.equal(monthlyBudget(life).scholarshipRepayment, 0, "no repayments are due when living costs cannot be covered");
