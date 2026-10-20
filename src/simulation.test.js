@@ -97,6 +97,8 @@ function lifeForEvent(event) {
     life.graduationSkill = "scholarship";
   }
   if (event.id === "choice-work-practice") life.occupation = "農作業";
+  if (event.id === "choice-first-career") life.careerCrossroads = true;
+  if (event.id === "choice-work-offer") life.nextCareerReviewAt = 0;
   const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", gender: "女性", alive: true, affinity: 60, history: [] });
   life.mana = 50;
   if (/arranged/.test(event.id)) life.status = { name: "貴族" };
@@ -665,7 +667,7 @@ test("choice catalog contains distinct stateful decision events", () => {
   }
 });
 
-test("school fallback is informative, meaningful, and presented only once", () => {
+test("the school-age stage no longer shows a generic fallback decision", () => {
   const life = createLife(() => 0.5);
   life.age = 9;
   life.maxHumanAge = 80;
@@ -674,23 +676,8 @@ test("school fallback is informative, meaningful, and presented only once", () =
   life.nextLogAt = Infinity;
   life.nextSocialAt = Infinity;
   life.eventHistory.push({ id: "edu-childhood", age: 6 });
-
   advanceLife(life, 0.25, () => 0.5);
-  assert.equal(life.pendingDecision.title, "これからの学び");
-  assert.ok(life.pendingDecision.choices.every((choice) => choice.preview.length === 2));
-  const workChoice = life.pendingDecision.choices.find((choice) => choice.effect === "work");
-  assert.match(workChoice.preview[1], /所持金/);
-  assert.match(workChoice.preview[1], /注意:/);
-  const fame = life.fame;
-  const skill = life.skills.literacy ?? 0;
-  applyChoice(life, { effect: "study" }, () => 0.5);
-  assert.equal(life.fame, fame);
-  assert.ok(life.skills.literacy > skill, "studying grants literacy rather than fame");
-
-  life.nextDecisionAt = life.age;
-  advanceLife(life, 0.25, () => 0.5);
-  assert.equal(life.pendingDecision, null, "the resolved school fallback is not presented again");
-  assert.equal(life.eventHistory.filter((event) => event.id === "choice-fallback-school").length, 1);
+  assert.equal(life.pendingDecision, null);
 });
 
 test("fallback alternatives have distinct mechanical outcomes", () => {
@@ -828,6 +815,7 @@ test("a chosen mage apprenticeship trains skills and opens an explicit career ch
   assert.equal(decide(life, "apprentice-magic", random).ok ?? true, true);
   assert.equal(life.occupation, "魔術師の弟子");
   assert.equal(life.trainingSkill, "magic");
+  life.nextDecisionAt = Infinity;
   assert.ok(life.mentor && life.npcs.some((npc) => npc.id === life.mentor));
   assert.ok(life.gold < 80, "tuition is paid");
   assert.ok(life.lastResult.details.some((line) => line.includes("所持金")));
@@ -890,9 +878,9 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.equal(life.gold, 0, "tuition is not taken from the child's empty wallet");
   assert.equal(life.trainingEndsAt, 12, "the basic school course lasts four human-equivalent years");
   assert.ok(life.lastResult.details.some((line) => line.includes("親の財産-")));
-  const route = CHOICE_EVENTS.find((event) => event.id === "edu-apprenticeship");
-  const routeChoices = route.choicesFor({ ...life, age: 13, occupation: "まだ幼い子ども" });
-  assert.ok(routeChoices.some((choice) => choice.effect.startsWith("career-start:")));
+  const route = CHOICE_EVENTS.find((event) => event.id === "choice-first-career");
+  const routeChoices = route.choicesFor({ ...life, age: 13, occupation: "家業の手伝い" });
+  assert.ok(routeChoices.some((choice) => choice.effect.startsWith("career-first:")));
   assert.ok(routeChoices.some((choice) => choice.effect === "path-academy"));
 });
 
@@ -938,7 +926,7 @@ test("ordinary wage cash flow leaves only a modest monthly surplus", () => {
   const farmer = adultLife(46, { occupation: "農作業", occupationRole: "農作業", occupationSkill: 0, occupationYears: 0 }).life;
   farmer.world = { situation: "平和" };
   const budget = monthlyBudget(farmer);
-  assert.equal(budget.income.work, 3.9 * TUNING.wageMultiplier);
+  assert.equal(budget.income.work, 3.5 * TUNING.wageMultiplier);
   assert.equal(budget.expenses.living, TUNING.adultLivingCostLegacyG);
   assert.equal(budget.expenses.rent, TUNING.homeRentLegacyG);
   assert.ok(budget.net > 0 && budget.net < 0.75, "an ordinary farmer's monthly cash flow stays near break-even");
@@ -1340,24 +1328,105 @@ test("business expansion uses the configured base rates and caps the count of in
   assert.ok(monthlyBudget(life).income.work > 0);
 });
 
-test("job offers show explicit career destinations with salary and skill requirements", () => {
+test("periodic job changes offer up to three destinations with an explanatory note", () => {
   const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-offer");
-  const life = makeLife({ skills: { literacy: 0, trade: 0, scholarship: 0, magic: 0 }, mana: 0 });
+  const life = makeLife({ age: 30, occupation: "職人見習い", skills: { literacy: 0, trade: 5, scholarship: 5, magic: 0, craft: 5 }, mana: 0 });
+  life.nextCareerReviewAt = 30;
+  assert.equal(isRoutineEventEligible(life, event), true);
+  life.nextCareerReviewAt = 40;
+  assert.equal(isRoutineEventEligible(life, event), false, "not before the scheduled review");
+  life.nextCareerReviewAt = 30;
   const choices = event.choicesFor(life);
   assert.equal(choices.at(-1).effect, "steady");
-  assert.ok(choices.slice(0, -1).length >= 2);
-  assert.ok(choices.slice(0, -1).every((choice) => choice.effect.startsWith("career-change:")));
-  assert.ok(choices.slice(0, 2).every((choice) => choice.preview.length === 2
-    && choice.preview[0].startsWith("月給") && choice.preview[1].startsWith("必要技能:")));
+  const jobs = choices.slice(0, -1);
+  assert.ok(jobs.length >= 1 && jobs.length <= 3);
+  assert.ok(jobs.every((choice) => choice.effect.startsWith("career-change:")));
+  assert.ok(jobs.every((choice) => choice.preview.some((line) => line.startsWith("メリット:")) || choice.preview.length <= 2));
   const recessionOptions = event.choicesFor({
     ...life, occupation: "失業中", skills: { ...life.skills, trade: 5 }, world: { situation: "不況" },
   });
-  assert.ok(recessionOptions.find((choice) => choice.effect === "career-change:商人").preview[0].includes("不況"));
-  const unemployed = makeLife({ age: 16, occupation: "失業中", skills: { manual: 0, farming: 0, craft: 0 } });
-  unemployed.eventHistory.push({ id: event.id, age: 14 });
-  assert.equal(isRoutineEventEligible(unemployed, event), true, "unemployed teenagers can receive explicit job options");
-  unemployed.age = 15;
-  assert.equal(isRoutineEventEligible(unemployed, event), false, "an unemployed character waits two years between offers");
+  assert.ok(recessionOptions[0].preview[0].includes("不況"));
+  event.prepare(life, () => 0.5, {});
+  assert.ok(life.nextCareerReviewAt >= 35 && life.nextCareerReviewAt <= 40, "next review comes 5-10 years later");
+});
+
+function firstCareerJobs(life) {
+  const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-first-career");
+  return event.choicesFor(life).filter((choice) => choice.effect.startsWith("career-first:")).map((choice) => choice.effect.split(":")[1]);
+}
+
+test("the first career choice is built from abilities and is offered after leaving school", () => {
+  const strong = makeLife({ age: 14, occupation: "家業の手伝い", baseStats: { body: 85, combat: 80, intellect: 50, dexterity: 45, charm: 50, luck: 50 } });
+  const strongJobs = firstCareerJobs(strong);
+  assert.equal(strongJobs.length, 3);
+  assert.ok(strongJobs.includes("兵士") && strongJobs.includes("冒険者"));
+  const plain = makeLife({ age: 14, occupation: "家業の手伝い", baseStats: { body: 45, combat: 40, intellect: 50, dexterity: 50, charm: 50, luck: 50 } });
+  const plainJobs = firstCareerJobs(plain);
+  assert.equal(plainJobs.length, 3);
+  assert.ok(!plainJobs.includes("兵士") && !plainJobs.includes("冒険者"));
+  assert.ok(plainJobs.includes("農作業") || plainJobs.includes("服飾店の見習い"));
+
+  const life = createLife(() => 0.5);
+  life.race = RACES[0];
+  life.started = true;
+  life.playing = true;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  life.world.nextChangeAt = Infinity;
+  life.pendingDecision = null;
+  life.age = 7;
+  life.eventHistory.push({ id: "edu-childhood", age: 6 });
+  life.nextDecisionAt = Infinity;
+  decide(life, "edu-town-school", () => 0.5);
+  for (let step = 0; step < 60 && !life.pendingDecision; step += 1) advanceLife(life, 0.25, () => 0.5);
+  assert.ok(life.journal.some((entry) => entry.text.includes("町の学校を卒業した")));
+  assert.equal(life.pendingDecision?.title, "進路を決める");
+  assert.ok(life.pendingDecision.choices.some((choice) => choice.effect === "path-academy"));
+  chooseDecision(life, life.pendingDecision.choices[0].effect, () => 0.5);
+  assert.notEqual(life.occupation, "家業の手伝い");
+  assert.ok(life.historyFlags.includes("first-career-done"));
+});
+
+test("a child who never attends school still reaches the career choice, and giving up on academy returns to it", () => {
+  const life = createLife(() => 0.5);
+  life.race = RACES[0];
+  life.started = true;
+  life.playing = true;
+  life.nextLogAt = Infinity;
+  life.nextSocialAt = Infinity;
+  life.world.nextChangeAt = Infinity;
+  life.age = 14;
+  life.nextDecisionAt = Infinity;
+  for (let step = 0; step < 8 && !life.pendingDecision; step += 1) advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision?.title, "進路を決める");
+  chooseDecision(life, "path-academy", () => 0.5);
+  advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision?.id, "edu-academy");
+  chooseDecision(life, "academy-skip", () => 0.5);
+  advanceLife(life, 0.25, () => 0.5);
+  assert.equal(life.pendingDecision?.title, "進路を決める");
+  assert.ok(!life.pendingDecision.choices.some((choice) => choice.effect === "path-academy"));
+});
+
+test("a calling from the church lets a magically gifted character become a priest after years of service", () => {
+  const call = CHOICE_EVENTS.find((event) => event.id === "choice-church-calling");
+  const gifted = makeLife({ age: 20, occupation: "農作業", mana: 30 });
+  assert.equal(isRoutineEventEligible(gifted, call), true);
+  assert.equal(isRoutineEventEligible({ ...gifted, mana: 5 }, call), false);
+  decide(gifted, "church-join", () => 0.5);
+  assert.equal(gifted.occupation, "聖職者");
+  const trainee = monthlyBudget(gifted).income.work;
+  gifted.occupationYears = 9;
+  gifted.age = 30;
+  decide(gifted, "promotion-apply", () => 0);
+  assert.equal(gifted.occupationRole, "司祭");
+  assert.ok(monthlyBudget(gifted).income.work > trainee * 2);
+});
+
+test("practising skills raises the matching base ability", () => {
+  const life = makeLife({ age: 20, occupation: "兵士", skills: { combat: 0 }, baseStats: { body: 50, combat: 50, intellect: 50, dexterity: 50, charm: 50, luck: 50 } });
+  decide(life, "work-practice", () => 0.5);
+  assert.ok(life.baseStats.combat > 50);
 });
 
 test("widowhood, divorce, and remarriage keep state consistent", () => {
@@ -1504,7 +1573,7 @@ test("お金を使う options require funds, apply effects and respect cooldowns
   assert.equal(spendMoney(life, "keep-pet"), null, "only one pet");
 });
 
-test("a newborn child is named through a decision, including a free-text name", () => {
+test("a newborn child is named by choosing among suggested names", () => {
   const life = createLife(() => 0.5);
   const child = { id: "kid", name: "仮・名", relationship: "子", humanAge: 0, alive: true, gender: "女性", affinity: 70, nameDecided: false, history: [] };
   life.npcs.push(child);
@@ -1515,8 +1584,10 @@ test("a newborn child is named through a decision, including a free-text name", 
   advanceLife(life, 0.1, () => 0.5);
   assert.equal(life.pendingDecision?.title, "子どもの名前");
   assert.equal(life.pendingDecision.choices.length, 3);
-  chooseDecision(life, "name-child:ミナ");
-  assert.equal(child.name.split("・")[0], "ミナ");
+  assert.equal(life.pendingDecision.nameInput, undefined, "there is no free-text name field");
+  const candidate = life.pendingDecision.choices[0].effect.slice("name-child:".length);
+  chooseDecision(life, life.pendingDecision.choices[0].effect);
+  assert.equal(child.name.split("・")[0], candidate.split("・")[0]);
   assert.equal(child.nameDecided, true);
 });
 

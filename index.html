@@ -83,32 +83,32 @@
             <span>現在値</span>
           </header>
           <div class="ability-bars" id="ability-bars">
-            <div class="ability-row" data-stat-key="body">
-              <div class="ability-label"><span>身体能力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
-              <div class="ability-track" role="progressbar" aria-label="身体能力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            <div class="ability-row" data-stat-key="body" data-stat-max="200">
+              <div class="ability-label"><span>体力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="体力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
             </div>
-            <div class="ability-row" data-stat-key="combat">
-              <div class="ability-label"><span>戦闘基礎能力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
-              <div class="ability-track" role="progressbar" aria-label="戦闘基礎能力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            <div class="ability-row" data-stat-key="combat" data-stat-max="200">
+              <div class="ability-label"><span>戦闘力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="戦闘力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
             </div>
-            <div class="ability-row" data-stat-key="intellect">
+            <div class="ability-row" data-stat-key="intellect" data-stat-max="200">
               <div class="ability-label"><span>知力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
               <div class="ability-track" role="progressbar" aria-label="知力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
             </div>
-            <div class="ability-row" data-stat-key="dexterity">
+            <div class="ability-row" data-stat-key="dexterity" data-stat-max="200">
               <div class="ability-label"><span>器用さ</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
               <div class="ability-track" role="progressbar" aria-label="器用さ" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
             </div>
-            <div class="ability-row" data-stat-key="charm">
-              <div class="ability-label"><span>魅力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
-              <div class="ability-track" role="progressbar" aria-label="魅力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            <div class="ability-row" data-stat-key="mana" data-stat-max="200">
+              <div class="ability-label"><span>魔力</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="魔力" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
             </div>
-            <div class="ability-row" data-stat-key="luck">
-              <div class="ability-label"><span>運</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
-              <div class="ability-track" role="progressbar" aria-label="運" aria-valuemin="0" aria-valuemax="200" aria-valuenow="0"><span></span></div>
+            <div class="ability-row" data-stat-key="fame" data-stat-max="100">
+              <div class="ability-label"><span>名声</span><span class="ability-value"><strong data-stat-value>0</strong><small data-stat-change aria-hidden="true"></small></span></div>
+              <div class="ability-track" role="progressbar" aria-label="名声" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
             </div>
           </div>
-          <p class="ability-note">棒の長さは0〜200を基準に表示しています。</p>
+          <p class="ability-note">棒の長さは、名声は0〜100、そのほかは0〜200を基準に表示しています。</p>
         </section>
         <section class="log-card" aria-labelledby="journal-heading">
           <div class="log-head">
@@ -146,11 +146,6 @@
       <h2 id="decision-title">選択</h2>
       <p class="dialog-copy" id="decision-copy"></p>
       <div class="choice-list" id="choice-list"></div>
-      <form class="name-form" id="name-form" hidden>
-        <label for="name-input">自分で名前をつける</label>
-        <input id="name-input" type="text" maxlength="12" autocomplete="off" placeholder="名前（例：ミナ）" />
-        <button class="secondary-control" id="name-submit" type="submit">この名前にする</button>
-      </form>
     </dialog>
 
     <dialog class="game-dialog" id="result-dialog" aria-labelledby="result-title">

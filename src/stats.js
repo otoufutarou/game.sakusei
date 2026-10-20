@@ -62,6 +62,7 @@ export const SKILL_NAMES = Object.freeze({
   literacy: "読み書き",
   swordsmanship: "剣術",
   scholarship: "学術",
+  faith: "信仰",
 });
 
 export function skillName(skill) {
