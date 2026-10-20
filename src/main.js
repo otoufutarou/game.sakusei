@@ -49,8 +49,6 @@ const elements = {
   spendDialog: $("#spend-dialog"),
   spendSummary: $("#spend-summary"),
   spendList: $("#spend-list"),
-  nameForm: $("#name-form"),
-  nameInput: $("#name-input"),
   moneyDialog: $("#money-dialog"),
   moneyBody: $("#money-body"),
   endingDialog: $("#ending-dialog"),
@@ -255,19 +253,20 @@ function updateLifeDisplay() {
     ? `${life.illness.name}・${life.illness.severity}`
     : life.health;
   elements.people.textContent = familySummary();
-  updateBaseAbilities(currentStats(life));
+  updateBaseAbilities({ ...currentStats(life), fame: life.fame ?? 0 });
 }
 
 function updateBaseAbilities(stats) {
-  for (const key of STAT_KEYS) {
+  for (const key of elements.abilityRows.keys()) {
     const row = elements.abilityRows.get(key);
     if (!row) continue;
     const value = Math.round(stats[key]);
-    const ariaValue = Math.min(200, Math.max(0, value));
+    const ariaValue = Math.min(Number(row.dataset.statMax) || 200, Math.max(0, value));
     const valueNode = row.querySelector("[data-stat-value]");
     const changeNode = row.querySelector("[data-stat-change]");
     const track = row.querySelector(".ability-track");
-    const percentage = Math.min(100, Math.max(0, (stats[key] / 200) * 100));
+    const max = Number(row.dataset.statMax) || 200;
+    const percentage = Math.min(100, Math.max(0, (stats[key] / max) * 100));
     valueNode.textContent = String(value);
     track.setAttribute("aria-valuenow", String(ariaValue));
     track.setAttribute("aria-valuetext", String(value));
@@ -448,8 +447,6 @@ function showDecision() {
   elements.decisionTitle.textContent = decision.title;
   elements.decisionCopy.textContent = decision.copy;
   elements.choices.replaceChildren();
-  elements.nameForm.hidden = !decision.nameInput;
-  elements.nameInput.value = "";
   for (const choice of decision.choices) {
     const button = element("button", "choice-button");
     button.type = "button";
@@ -641,19 +638,6 @@ $("#open-status").addEventListener("click", openStatus);
 $("#open-status-2").addEventListener("click", openStatus);
 $("#open-money").addEventListener("click", openMoney);
 $("#open-spend").addEventListener("click", openSpend);
-elements.nameForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const name = elements.nameInput.value.trim();
-  if (!name || !life.pendingDecision?.nameInput) return;
-  if (!chooseDecision(life, `name-child:${name}`, random)) return;
-  currentDecisionId = null;
-  elements.decisionDialog.close();
-  addJournalEvents();
-  updateLifeDisplay();
-  updateControls();
-  showResult();
-  save(true);
-});
 const openHistory = () => {
   elements.historyPage.hidden = false;
   renderHistory();

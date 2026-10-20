@@ -54,7 +54,7 @@ function missingDefaults(life) {
     mentor: null,
     school: null,
     trainingSkill: null,
-    occupationRole: life.occupation ?? "まだ幼い子ども",
+    occupationRole: life.occupation ?? "家業の手伝い",
     promotionNote: "",
     graduationPending: false,
     graduationSkill: null,
@@ -125,6 +125,10 @@ export function migrateLife(data) {
     life.statsEstimated = true;
   }
   if (typeof life.mana !== "number") life.mana = 0;
+  if (life.race.id !== "dragon" && life.occupation === "まだ幼い子ども") {
+    life.occupation = "家業の手伝い";
+    if (life.occupationRole === "まだ幼い子ども") life.occupationRole = "家業の手伝い";
+  }
   if (Array.isArray(life.children) && life.children.some((child) => typeof child === "string")) {
     life.legacyChildren = life.children.filter((child) => typeof child === "string");
     life.children = life.children.filter((child) => typeof child !== "string");
