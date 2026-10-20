@@ -342,6 +342,21 @@ test("dungeon opportunities occur twice after adulthood, counting refusals and r
   }
 });
 
+test("reloading an unanswered dungeon invitation does not consume an opportunity", () => {
+  const { life } = adultLife(99, { age: 22, nextDungeonAt: 22, occupation: "引退" });
+  advanceLife(life, 0.01, () => 0.99);
+  assert.equal(life.pendingDecision.id, "choice-dungeon-1");
+  assert.equal(life.dungeonOffers, 0);
+  const restored = deserializeLife(serializeLife(life));
+  restored.playing = true;
+  advanceLife(restored, 0.01, () => 0.99);
+  assert.equal(restored.pendingDecision.id, "choice-dungeon-1");
+  assert.equal(restored.dungeonOffers, 0);
+  chooseDecision(restored, "dungeon-decline", () => 0.5);
+  assert.equal(restored.dungeonOffers, 1);
+  assert.equal(restored.nextDungeonAt, 48);
+});
+
 test("economy budgets cover youth, spouses, promotions and business rather than only single beginners", () => {
   const spouse = { id: "spouse", alive: true, occupation: "教師" };
   for (const [occupation, role] of [["農作業", "農地所有者"], ["商人", "商会主"], ["教師", "学院長"], ["魔術師", "宮廷魔術師"], ["聖職者", "司祭"]]) {

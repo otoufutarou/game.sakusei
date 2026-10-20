@@ -2476,9 +2476,7 @@ export const CHOICE_EVENTS = [
     requirements: { minAge: 18, custom: (life) => (life.dungeonOffers ?? 0) < 2 && life.age >= (life.nextDungeonAt ?? TUNING.dungeonOfferAges[0]) },
     copy: "近くのダンジョンを探索する機会が訪れた。宝もあるが、魔物に襲われて出費がかさむ危険もある。",
     prepare: (life, random, decision) => {
-      life.dungeonOffers = (life.dungeonOffers ?? 0) + 1;
-      decision.id = `choice-dungeon-${life.dungeonOffers}`;
-      life.nextDungeonAt = life.dungeonOffers < 2 ? Math.max(TUNING.dungeonOfferAges[1], life.age + 15) : Infinity;
+      decision.id = `choice-dungeon-${(life.dungeonOffers ?? 0) + 1}`;
     },
     choices: [{ label: "ダンジョンに行く", effect: "dungeon-enter" }, { label: "探索を見送る", effect: "dungeon-decline", preview: ["費用: なし", "危険を避け、今の暮らしを続ける"] }],
   },
@@ -2723,6 +2721,10 @@ export function applyChoice(life, choice, random = Math.random) {
   }
   let message;
   const effectType = selected.effect.split(":")[0];
+  if (effectType === "dungeon-enter" || effectType === "dungeon-decline") {
+    life.dungeonOffers = (life.dungeonOffers ?? 0) + 1;
+    life.nextDungeonAt = life.dungeonOffers < 2 ? Math.max(TUNING.dungeonOfferAges[1], life.age + 15) : Infinity;
+  }
   switch (effectType) {
     case "will-legal":
       life.will = { type: "legal", targetId: null, charity: null };
