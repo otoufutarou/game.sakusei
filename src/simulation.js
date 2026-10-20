@@ -56,7 +56,8 @@ export const TUNING = Object.freeze({
   homeUpkeepLegacyG: { small: 0.15, large: 0.5, estate: 2 },
   petUpkeepLegacyG: 0.1,
   wageMultiplier: 0.8,
-  occupationSkillActivity: 0.75,
+  occupationSkillActivity: 0.6,
+  occupationSkillPayDivisor: 400,
   scholarshipThresholds: { magic: 60, knight: 70, scholar: 70 },
   scholarshipLivingCostLegacyG: 12,
   scholarshipRepaymentRate: 0.1,
@@ -1054,7 +1055,7 @@ export function monthlyBudget(life, random = null) {
   const mods = worldModifiers(life);
   const working = life.age >= 13 && !(life.occupation === "まだ幼い子ども");
   let work = working ? (OCCUPATION_INCOME[life.occupation] ?? 1) * roleMultiplier(life)
-    * (1 + (life.occupationSkill ?? 0) / 200) * TUNING.wageMultiplier : 0;
+    * (1 + Math.min(100, life.occupationSkill ?? 0) / TUNING.occupationSkillPayDivisor) * TUNING.wageMultiplier : 0;
   work += life.businessRevenue ?? 0;
   work *= working ? mods.incomeFor(life.occupation) : 1;
   if (random && life.occupation === "冒険者") work *= 0.4 + 1.2 * random();
