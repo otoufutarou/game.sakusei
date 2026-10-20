@@ -1,5 +1,5 @@
 import {
-  actualAge, advanceLife, chooseDecision, createLife, formatGold, livingChildren, monthlyBudget, occupationTitle, skillTier, SKILL_IDS_LIST, spendMoney, spendOptions,
+  actualAge, advanceLife, chooseDecision, createLife, formatGold, livingChildren, monthlyBudget, occupationSkillName, occupationTitle, skillTier, SKILL_IDS_LIST, spendMoney, spendOptions,
 } from "./simulation.js";
 import { characterSprite, drawJourney, lifeStage, livingFamily } from "./character-sprite.js";
 import { STAT_KEYS, STAT_LABELS, abilityLabel, currentStats, magicTier, skillName } from "./stats.js";
@@ -91,8 +91,7 @@ function money(value) {
 
 function createJournalItem(event) {
   const item = element("li", `event-item ${event.kind === "decision" ? "decision-event" : ""} ${event.kind === "world" ? "world-event" : ""} ${event.kind === "death" ? "death-event" : ""}`);
-  const content = element("div", "event-content");
-  content.append(element("span", "event-kind", event.label), element("div", "", event.text));
+  const content = element("div", "event-content", event.text);
   item.append(element("span", "event-age", `${Math.floor(event.age * life.race.multiplier)}歳`), content);
   return item;
 }
@@ -253,7 +252,13 @@ function updateLifeDisplay() {
     ? `${life.illness.name}・${life.illness.severity}`
     : life.health;
   elements.people.textContent = familySummary();
-  updateBaseAbilities({ ...currentStats(life), fame: life.fame ?? 0 });
+  const skillLabel = `職業技能（${occupationSkillName(life)}）`;
+  const skillRow = elements.abilityRows.get("occupationSkill");
+  const label = skillRow.querySelector("[data-occupation-skill-label]");
+  label.textContent = skillLabel;
+  label.title = skillLabel;
+  skillRow.querySelector(".ability-track").setAttribute("aria-label", skillLabel);
+  updateBaseAbilities({ ...currentStats(life), occupationSkill: life.occupationSkill ?? 0, fame: life.fame ?? 0 });
 }
 
 function updateBaseAbilities(stats) {
@@ -326,7 +331,9 @@ function renderStatus() {
     ...(life.peerageTitle ? [["爵位", life.peerageTitle]] : []),
     ["名声", Math.round(life.fame)],
   ], life.promotionNote ? [element("p", "note", `昇進: ${life.promotionNote}`)] : null);
-  section("基礎能力", STAT_KEYS.map((key) => [STAT_LABELS[key], `${Math.round(stats[key])}（${abilityLabel(stats[key])}）`]), [
+  section("基礎能力", STAT_KEYS.map((key) => key === "dexterity"
+    ? [`職業技能（${occupationSkillName(life)}）`, `${Math.round(life.occupationSkill ?? 0)}（${skillTier(life.occupationSkill ?? 0)}）`]
+    : [STAT_LABELS[key], `${Math.round(stats[key])}（${abilityLabel(stats[key])}）`]), [
     element("p", "note", `評価は人間基準の目安です。${life.race.id === "dragon" ? "ドラゴンには同じ基準を当てはめられません。" : ""}${life.statsEstimated ? "古い保存データのため、能力は種族平均からの推定値です。" : ""}`),
   ]);
   section("魔力", [["魔力量", Math.round(stats.mana)], ["魔力区分", magicTier(stats.mana)], ["魔術技能", `${Math.round(life.skills.magic ?? 0)}（${skillTier(life.skills.magic ?? 0)}）`]], [
