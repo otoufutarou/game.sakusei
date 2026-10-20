@@ -56,6 +56,8 @@ export const TUNING = Object.freeze({
   homeUpkeepLegacyG: { small: 0.15, large: 0.5, estate: 2 },
   petUpkeepLegacyG: 0.1,
   wageMultiplier: 0.8,
+  occupationSkillActivity: 0.6,
+  occupationSkillPayDivisor: 400,
   scholarshipThresholds: { magic: 60, knight: 70, scholar: 70 },
   scholarshipLivingCostLegacyG: 12,
   scholarshipRepaymentRate: 0.1,
@@ -638,6 +640,14 @@ function skillGrowthPlans(life) {
   for (const [skill, practice] of Object.entries(life.skillPractice ?? {})) {
     if (practice.activity > 0) plans.set(skill, practice);
   }
+  const occupationSkill = OCCUPATION_SKILLS[life.occupation];
+  if (life.age >= 13 && !NON_WORKING.includes(life.occupation) && occupationSkill) {
+    const practice = plans.get(occupationSkill);
+    plans.set(occupationSkill, {
+      activity: TUNING.occupationSkillActivity + (practice?.activity ?? 0),
+      learning: practice?.learning ?? 1,
+    });
+  }
   // One person's time is shared: total activity beyond intensive training (1.3) is scaled down
   // so the same hours are never counted twice.
   const total = [...plans.values()].reduce((sum, plan) => sum + plan.activity, 0);
@@ -1045,7 +1055,7 @@ export function monthlyBudget(life, random = null) {
   const mods = worldModifiers(life);
   const working = life.age >= 13 && !(life.occupation === "まだ幼い子ども");
   let work = working ? (OCCUPATION_INCOME[life.occupation] ?? 1) * roleMultiplier(life)
-    * (1 + (life.occupationSkill ?? 0) / 200) * TUNING.wageMultiplier : 0;
+    * (1 + Math.min(100, life.occupationSkill ?? 0) / TUNING.occupationSkillPayDivisor) * TUNING.wageMultiplier : 0;
   work += life.businessRevenue ?? 0;
   work *= working ? mods.incomeFor(life.occupation) : 1;
   if (random && life.occupation === "冒険者") work *= 0.4 + 1.2 * random();
@@ -2203,7 +2213,8 @@ export const CHOICE_EVENTS = [
     id: "choice-work-practice", title: "仕事の腕を磨く", category: "職業・昇進", weight: 0.7,
     requirements: {
       minAge: 13, cooldownYears: 3,
-      custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation) && !training(life),
+      custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation)
+        && !training(life) && life.occupationSkill < 20,
     },
     copy: "仕事の取り組み方を見直す機会が訪れた。技能を磨くか、今の働き方を続けるか選べる。",
     choices: [
