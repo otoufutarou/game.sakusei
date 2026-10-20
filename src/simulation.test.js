@@ -347,7 +347,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
   }
 });
 
-test("skills stay fixed over time unless the player chooses to practice", () => {
+test("working grows occupation skill automatically, with choices adding extra growth", () => {
   const life = makeLife({
     age: 20,
     playing: true,
@@ -365,13 +365,14 @@ test("skills stay fixed over time unless the player chooses to practice", () => 
   });
   const journalLength = life.journal.length;
   advanceLife(life, 1 / 12, () => 0.999);
-  assert.equal(life.skills.teaching, 0);
+  const automaticGrowth = life.skills.teaching;
+  assert.ok(automaticGrowth > 0);
   assert.equal(life.journal.length, journalLength);
   decide(life, "work-practice", () => 0.999);
-  assert.equal(life.skills.teaching, 1);
+  assert.ok(life.skills.teaching > automaticGrowth + 0.9);
 });
 
-test("chosen ongoing practice grows its skill without passive career skill growth", () => {
+test("chosen ongoing practice grows a separate skill alongside career experience", () => {
   const life = makeLife({
     age: 20,
     playing: true,
@@ -392,7 +393,32 @@ test("chosen ongoing practice grows its skill without passive career skill growt
   const selectedMagic = life.skills.magic;
   advanceLife(life, 0.25, () => 0.999);
   assert.ok(life.skills.magic > selectedMagic);
-  assert.equal(life.skills.teaching, 0);
+  assert.ok(life.skills.teaching > 0);
+});
+
+test("decades of work advance occupation skill beyond the beginner ranks", () => {
+  const life = makeLife({
+    age: 60,
+    occupation: "冒険者",
+    occupationSkill: 0,
+    occupationRank: "初心者",
+    occupationYears: 45,
+    skills: { adventuring: 0 },
+    skillTalents: { adventuring: "普通" },
+    skillPractice: {},
+    skillMonthProgress: 0,
+    skillHistory: [],
+  });
+  advanceSkills(life, 45);
+  assert.ok(life.occupationSkill >= 60, `45 years of work produced skill ${life.occupationSkill}`);
+  assert.equal(skillTier(life.occupationSkill), "熟練");
+});
+
+test("routine work-practice choices stop appearing once career skill reaches apprentice level", () => {
+  const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-practice");
+  assert.ok(event);
+  assert.equal(isRoutineEventEligible(makeLife({ age: 18, occupationSkill: 19 }), event), true);
+  assert.equal(isRoutineEventEligible(makeLife({ age: 18, occupationSkill: 20 }), event), false);
 });
 
 test("race age multipliers normalize practice to human-equivalent years", () => {

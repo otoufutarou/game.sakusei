@@ -56,6 +56,7 @@ export const TUNING = Object.freeze({
   homeUpkeepLegacyG: { small: 0.15, large: 0.5, estate: 2 },
   petUpkeepLegacyG: 0.1,
   wageMultiplier: 0.8,
+  occupationSkillActivity: 0.75,
   scholarshipThresholds: { magic: 60, knight: 70, scholar: 70 },
   scholarshipLivingCostLegacyG: 12,
   scholarshipRepaymentRate: 0.1,
@@ -637,6 +638,14 @@ function skillGrowthPlans(life) {
   const plans = new Map();
   for (const [skill, practice] of Object.entries(life.skillPractice ?? {})) {
     if (practice.activity > 0) plans.set(skill, practice);
+  }
+  const occupationSkill = OCCUPATION_SKILLS[life.occupation];
+  if (life.age >= 13 && !NON_WORKING.includes(life.occupation) && occupationSkill) {
+    const practice = plans.get(occupationSkill);
+    plans.set(occupationSkill, {
+      activity: TUNING.occupationSkillActivity + (practice?.activity ?? 0),
+      learning: practice?.learning ?? 1,
+    });
   }
   // One person's time is shared: total activity beyond intensive training (1.3) is scaled down
   // so the same hours are never counted twice.
@@ -2203,7 +2212,8 @@ export const CHOICE_EVENTS = [
     id: "choice-work-practice", title: "仕事の腕を磨く", category: "職業・昇進", weight: 0.7,
     requirements: {
       minAge: 13, cooldownYears: 3,
-      custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation) && !training(life),
+      custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation)
+        && !training(life) && life.occupationSkill < 20,
     },
     copy: "仕事の取り組み方を見直す機会が訪れた。技能を磨くか、今の働き方を続けるか選べる。",
     choices: [
