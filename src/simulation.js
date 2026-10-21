@@ -40,6 +40,7 @@ const DISEASE_TYPES = [
   { id: "tuberculosis", name: "結核", weight: 10 },
   { id: "fracture", name: "骨折", weight: 10 },
   { id: "severeInjury", name: "重い外傷", weight: 10 },
+  { id: "trauma", name: "精神的トラウマ", weight: 0 },
   { id: "advancedCancer", name: "進行がん", weight: 5 },
 ];
 const HAIR_COLORS = ["#34271f", "#47312b", "#b58b52", "#8d5947", "#c7c2ae"];
@@ -83,7 +84,7 @@ export const TUNING = Object.freeze({
   firstDecisionEarliestAge: 6,
   firstDecisionMeanYears: 1.2,
   firstDecisionLatestAge: 10.5,
-  socialMeanYears: 2.6,
+  socialMeanYears: 5.2,
   retirementHumanAge: 65,
   promotionSuccessChance: 0.25,
   promotionRetryYears: 3,
@@ -91,10 +92,10 @@ export const TUNING = Object.freeze({
   childDecisionMaxHumanAge: 45,
   childRetryYears: [2, 3],
   annualConceptionChanceByAge: [
-    { until: 29, chance: 0.3 },
-    { until: 34, chance: 0.22 },
-    { until: 39, chance: 0.14 },
-    { until: 45, chance: 0.06 },
+    { until: 29, chance: 0.8 },
+    { until: 34, chance: 0.8 },
+    { until: 39, chance: 0.8 },
+    { until: 45, chance: 0.8 },
   ],
   childRaceInheritance: "mother",
   treatmentSuccess: {
@@ -103,8 +104,14 @@ export const TUNING = Object.freeze({
     tuberculosis: { ordinary: 0.15, magic: 0.65 },
     fracture: { ordinary: 0.65, magic: 0.9 },
     severeInjury: { ordinary: 0.2, magic: 0.65 },
+    trauma: { ordinary: 0.6, magic: 0.85 },
     advancedCancer: { ordinary: 0.02, magic: 0.2 },
   },
+  injuryReviewYears: 2,
+  participationFatality: 0.12,
+  participationInjuryChance: 0.45,
+  clericTraumaChance: 0.3,
+  demonKingDurationYears: 6,
   illnessSeverityWeights: [
     { name: "軽症", weight: 60, duration: 0.15 },
     { name: "中等症", weight: 27, duration: 0.4 },
@@ -114,8 +121,8 @@ export const TUNING = Object.freeze({
   naturalRecoveryChance: { 軽症: 0.9, 中等症: 0.65, 重症: 0.35, 危篤: 0.15 },
   sequelaRates: { 軽症: 0, 中等症: 0.03, 重症: 0.15, 危篤: 0.35 },
   treatmentCosts: {
-    ordinary: { 中等症: 8, 重症: 15, 危篤: 25 },
-    magic: { 中等症: 25, 重症: 45, 危篤: 75 },
+    ordinary: { 中等症: 5, 重症: 5, 危篤: 5 },
+    magic: { 中等症: 20, 重症: 20, 危篤: 20 },
   },
   minorIllnessChanceByAge: [
     { until: 17, annualChance: 0.04 },
@@ -503,7 +510,11 @@ export function createLife(random = Math.random) {
     romanticPartnerId: null,
     lastResult: null,
     npcClock: 0,
-    nextSocialAt: 13 + rollExponential(1.5, random),
+    nextSocialAt: 13 + rollExponential(3, random),
+    demonKingRiseAt: 47.5,
+    demonKingStarted: false,
+    demonKingActive: false,
+    demonKingDefeated: false,
     careerHistory: [],
     npcs: [],
     health,
@@ -547,6 +558,19 @@ function appendEvent(life, text, kind = "life", label = "人生", id = null) {
   life.journal.push(event);
   life.eventCount += 1;
   if (id) life.eventHistory.push({ id, age: life.age });
+  const place = ["農村", "辺境"].includes(life.home) ? "村" : "町";
+  const milestones = [
+    [25, `名声が25を超えた。あなたは周囲の人気者だ。${place}のみんなに頼りにされている。`],
+    [50, `名声が50を超えた。あなたは${place}一番の人気者だ。子供たちはあなたに憧れている。`],
+    [100, "名声が100に到達した。あなたの名前は伝説として歴史に刻まれた。"],
+  ];
+  for (const [threshold, message] of milestones) {
+    const milestoneId = `fame-milestone-${threshold}`;
+    if ((life.fame ?? 0) < threshold || (life.eventHistory ?? []).some((entry) => entry.id === milestoneId)) continue;
+    life.journal.push({ age: life.age, text: message, kind: "life", label: "名声", id: milestoneId });
+    life.eventHistory.push({ id: milestoneId, age: life.age });
+    life.eventCount += 1;
+  }
   return event;
 }
 
@@ -973,6 +997,7 @@ const WORLD_TABLE = Object.freeze({
   "疫病流行": { weight: 2, price: 1.1, income: {}, defaultIncome: 0.9, npcHazard: 4, illness: 3 },
   "飢饉": { weight: 1.5, price: 1.8, income: { "農作業": 0.4 }, defaultIncome: 0.9, npcHazard: 2, illness: 1.3 },
   "不況": { weight: 2, price: 1.15, income: { "商人": 0.5 }, defaultIncome: 0.8, npcHazard: 1, illness: 1 },
+  "魔王君臨": { weight: 0, price: 1.25, income: { "農作業": 0.4, "商人": 0.65 }, defaultIncome: 0.8, npcHazard: 1.2, illness: 1.2 },
   "魔物の襲撃": { weight: 1.5, price: 1.1, income: { "冒険者": 1.1, "農作業": 0.8 }, defaultIncome: 1, npcHazard: 1.3, illness: 1 },
 });
 
@@ -992,6 +1017,7 @@ const WORLD_TEXT = Object.freeze({
   "疫病流行": () => "疫病が広がり始めた。病に倒れる人が増え、薬や医者の値が上がっている。",
   "飢饉": () => "不作が続き、飢饉が起きた。食料の値が跳ね上がっている。",
   "不況": () => "景気が冷え込み、商いや仕事が減っている。",
+  "魔王君臨": () => "北に魔王が君臨したようだ。魔王が倒されるまでの間、経済は不況、農業は不作に陥る。",
   "魔物の襲撃": () => "魔物の群れが人里を襲うようになった。辺境や農村では被害が出ている。",
 });
 
@@ -1000,6 +1026,7 @@ const WORLD_END_TEXT = Object.freeze({
   "疫病流行": "疫病の流行が収まり、町に日常が戻った。",
   "飢饉": "収穫が回復し、食料の値が落ち着いた。",
   "不況": "景気が持ち直し、仕事が戻ってきた。",
+  "魔王君臨": "魔王が討伐され、景気と農業が少しずつ回復し始めた。",
   "魔物の襲撃": "魔物の群れは討伐され、街道に平穏が戻った。",
 });
 
@@ -1037,10 +1064,18 @@ function advanceWorld(life, random) {
     world.since = life.age;
     world.nextChangeAt = life.age + 3 + rollExponential(7, random);
     life.situation = "平和";
+    if (ended === "魔王君臨") {
+      life.demonKingActive = false;
+      life.demonKingDefeated = true;
+    }
     appendEvent(life, WORLD_END_TEXT[ended], "world", "世界情勢", `world-end-${ended}-${Math.floor(life.age)}`);
     return;
   }
-  const choice = weightedPick(Object.entries(WORLD_TABLE), ([, entry]) => entry.weight, random)[0];
+  const choice = weightedPick(
+    Object.entries(WORLD_TABLE).filter(([situation]) => situation !== "魔王君臨"),
+    ([, entry]) => entry.weight,
+    random,
+  )[0];
   world.situation = choice;
   world.since = life.age;
   world.nextChangeAt = life.age + 1.5 + rollExponential(2.5, random);
@@ -1130,7 +1165,7 @@ export function monthlyBudget(life, random = null) {
 
 const CAREER_REVIEW_YEARS = [5, 10];
 const nextReviewGap = (random) => CAREER_REVIEW_YEARS[0] + random() * (CAREER_REVIEW_YEARS[1] - CAREER_REVIEW_YEARS[0]);
-const FIRST_CAREER_MIN_AGE = 12;
+const FIRST_CAREER_MIN_AGE = 13;
 const FIRST_CAREER_FALLBACK_AGE = 15;
 const FIRST_CAREER_MAX_AGE = 25;
 
@@ -1286,6 +1321,8 @@ function careerChoices(life, { occupations, effect = "career-start", excludeCurr
 function processMonth(life, random) {
   const budget = monthlyBudget(life, random);
   life.finance ??= { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 };
+  const previousGold = life.gold;
+  let borrowedThisMonth = 0;
   life.gold += budget.totalIncome - budget.totalExpense;
   if (budget.repayment > 0) {
     life.gold -= budget.repayment;
@@ -1296,11 +1333,14 @@ function processMonth(life, random) {
     life.scholarshipBalance = Math.max(0, life.scholarshipBalance - budget.scholarshipRepayment);
   }
   if (life.gold < 0) {
+    const shortfall = -life.gold;
+    borrowedThisMonth = Math.min(shortfall, Math.max(0, TUNING.ordinaryDebtLimit - (life.debt ?? 0)));
+    if (borrowedThisMonth > 0) {
+      life.debt = (life.debt ?? 0) + borrowedThisMonth;
+      recordGold(life, "生活費の借入", borrowedThisMonth);
+    }
     life.gold = 0;
     life.financialHardship = true;
-    if (!hasRecentEvent(life, "finance-shortfall", 3) && life.age >= 15) {
-      appendEvent(life, "収入が生活費に届かず、蓄えを使い切った。自動で借金はせず、暮らし向きを見直すことになった。", "life", "家計", "finance-shortfall");
-    }
   } else {
     life.financialHardship = false;
   }
@@ -1308,6 +1348,45 @@ function processMonth(life, random) {
   life.finance.totalIncome += budget.totalIncome;
   life.finance.totalExpense += budget.totalExpense + budget.repayment + budget.scholarshipRepayment;
   life.finance.lastMonth = { age: life.age, ...budget };
+  const expenseLogDue = life.finance.lastExpenseLogAt == null || life.age - life.finance.lastExpenseLogAt >= 1;
+  if (budget.net < -0.1 && (previousGold > life.gold || borrowedThisMonth > 0) && life.age >= 15 && expenseLogDue) {
+    const expenses = [
+      ["生活費", budget.expenses.living],
+      ["家賃", budget.expenses.rent],
+      ["家族の生活費", budget.expenses.family],
+      ["医療費", budget.expenses.medical],
+      ["借金の利息・返済", budget.expenses.interest + budget.repayment],
+      ["交際費・その他", budget.expenses.lifestyle],
+      ["住居・ペットの維持費", budget.expenses.upkeep],
+    ].filter(([, amount]) => amount > 0.05).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const factors = {
+      "不況": "不況で収入が減った",
+      "飢饉": "飢饉で食料や生活費が上がった",
+      "魔王君臨": "魔王の影響で不況と不作が続いている",
+      "疫病流行": "疫病で物価が上がっている",
+      "戦争中": "戦争で物価が上がっている",
+    };
+    const causes = expenses.map(([label]) => label);
+    if (factors[life.world?.situation]) causes.push(factors[life.world.situation]);
+    const cashLoss = Math.min(previousGold, -budget.net);
+    if (cashLoss > 0) recordGold(life, causes.join("・") || "家計の支出", -cashLoss);
+    appendEvent(
+      life,
+      `収入より支出が${gold(-budget.net)}多く、所持金が減った。主な要因: ${causes.join("、") || "毎月の家計"}。${borrowedThisMonth > 0 ? `${gold(borrowedThisMonth)}を借り入れた。` : life.debt >= TUNING.ordinaryDebtLimit ? "借入上限に達しており、これ以上は借りられない。" : ""}`,
+      "life", "家計", `finance-expense-${Math.floor(life.age)}`,
+    );
+    life.finance.lastExpenseLogAt = life.age;
+  }
+  if (life.gold === 0 && life.financialHardship && life.age >= 15
+    && !hasRecentEvent(life, "finance-shortfall", 3)) {
+    appendEvent(
+      life,
+      life.debt >= TUNING.ordinaryDebtLimit
+        ? `生活費が足りず、所持金と借入枠を使い切った（借金${gold(life.debt)}）。`
+        : `生活費が足りず、所持金を使い切った。借入枠が残っている場合は家計の不足分を借り入れる。`,
+      "life", "家計", "finance-shortfall",
+    );
+  }
 }
 
 // ---------------------------------------------------------------- NPCs and family
@@ -1845,12 +1924,16 @@ export const formatGold = (value) => `${goldFormatter.format(Number(value) || 0)
 const gold = formatGold;
 const asText = (text) => String(text);
 
-function insufficientFundsReason(life, cost, payer) {
+function insufficientFundsReason(life, cost, payer, allowBorrow = false) {
   const funds = availableFunds(life, payer);
   if (cost <= funds) return null;
+  if (allowBorrow && payer === PAYER.PLAYER
+    && (life.debt ?? 0) + cost - funds <= TUNING.ordinaryDebtLimit) return null;
   return payer === PAYER.PARENTS
     ? `親の財産が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`
-    : `所持金が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`;
+    : allowBorrow && payer === PAYER.PLAYER
+      ? `所持金と借入枠が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}・借金残高${gold(life.debt ?? 0)}）`
+      : `所持金が足りない（必要${gold(cost)}／所持${gold(Math.floor(funds))}）`;
 }
 
 function businessChance(life, size) {
@@ -1891,8 +1974,9 @@ const CHOICE_RULES = {
   work: {
     preview: () => ["費用: なし", `メリット: 所持金+${CHILDHOOD_CHOICE_REWARDS.workGold}G、仕事の技能+${CHILDHOOD_CHOICE_REWARDS.workSkill}`, "デメリット: 読み書きの学習は進まない"],
   },
-  "work-practice": {
-    preview: (life) => [`技能: ${skillName(OCCUPATION_SKILLS[life.occupation] ?? "general")} +1`, "職業を変えず、今の仕事の腕を磨く"],
+  "work-mentor-training": {
+    cost: 5,
+    preview: (life) => [`費用: 5G`, `メリット: ${skillName(OCCUPATION_SKILLS[life.occupation] ?? "general")}技能+4`, "その道の玄人から仕事のコツを学ぶ"],
   },
   steady: {
     preview: () => ["費用: なし", "今の暮らしを続ける"],
@@ -1992,21 +2076,23 @@ const CHOICE_RULES = {
     preview: () => ["費用: 6G", "メリット: 体調が回復する", "デメリット: 費用がかかる"],
   },
   "illness-ordinary-treatment": {
+    allowBorrow: true,
     cost: (life) => TUNING.treatmentCosts.ordinary[life.illness?.severity] ?? 5,
     preview: (life, cost) => [
-      `通常医療費: ${gold(cost)}`,
+      `費用: ${gold(cost)}（不足分は借入）`,
       `病名: ${life.illness?.name ?? "病気"}`,
       `基本成功率: ${Math.round((TUNING.treatmentSuccess[life.illness?.type]?.ordinary ?? 0) * 100)}%`,
-      "失敗しても直ちに死亡するわけではなく、療養を続ける。",
+      "町医者の治療。失敗しても直ちに死亡せず、療養を続ける。",
     ],
   },
   "illness-magic-treatment": {
+    allowBorrow: true,
     cost: (life) => TUNING.treatmentCosts.magic[life.illness?.severity] ?? 25,
     preview: (life, cost) => [
-      `魔法医療費: ${gold(cost)}`,
+      `費用: ${gold(cost)}（不足分は借入）`,
       `病名: ${life.illness?.name ?? "病気"}`,
       `基本成功率: ${Math.round((TUNING.treatmentSuccess[life.illness?.type]?.magic ?? 0) * 100)}%`,
-      "成功率は病気ごとに異なり、老化そのものは治せない。",
+      "聖職者の治療。成功率は病気ごとに異なり、老化そのものは治せない。",
     ],
   },
   "illness-home-care": { preview: () => ["費用: なし", "治療を受けず、療養を続ける"] },
@@ -2251,15 +2337,15 @@ export const CHOICE_EVENTS = [
     ],
   },
   {
-    id: "choice-work-practice", title: "仕事の腕を磨く", category: "職業・昇進", weight: 0.7,
+    id: "choice-work-mentor", title: "仕事の腕を磨く", category: "職業・昇進", weight: 0.7,
     requirements: {
-      minAge: 13, cooldownYears: 3,
+      minAge: 13, minimumGold: 5, cooldownYears: 3,
       custom: (life) => !NON_WORKING.includes(life.occupation) && !TRAINEE_OCCUPATIONS.includes(life.occupation)
         && !training(life) && life.occupationSkill < 20,
     },
-    copy: "仕事の取り組み方を見直す機会が訪れた。技能を磨くか、今の働き方を続けるか選べる。",
+    copy: "仕事の腕を磨くため、その道の玄人に話を聞く機会が訪れた。費用を払って学ぶか、今の仕事を続けるか。",
     choices: [
-      { label: "職業技能を磨く", effect: "work-practice" },
+      { label: "5Gを払い、玄人から話を聞く", effect: "work-mentor-training" },
       { label: "今の仕事を続ける", effect: "steady", preview: steadyPreview("今の技能と働き方を維持する") },
     ],
   },
@@ -2439,13 +2525,13 @@ export const CHOICE_EVENTS = [
   {
     id: "choice-illness-treatment", title: "病気の治療", category: "病気・事故", weight: 1, priority: true,
     requirements: {
-      minAge: 16, healthStates: ["療養中"],
+      minAge: 13, healthStates: ["療養中"],
       custom: (life) => life.illness && life.illness.severity !== "軽症",
     },
-    copy: (life) => `${life.illness?.name ?? "病気"}（${life.illness?.severity ?? "症状あり"}）の治療をどうするか決める。治療に失敗しても即座に命を落とすわけではない。`,
+    copy: (life) => `${life.illness?.name ?? "病気・怪我"}（${life.illness?.severity ?? "症状あり"}）の治療をどうするか決める。治療しない場合、年間約${Math.round(TUNING.illnessFatalityPerYearWhileIll * 100)}%の確率で命を落とす可能性がある。`,
     choices: [
-      { label: "通常医療を受ける", effect: "illness-ordinary-treatment" },
-      { label: "高価な魔法医療を受ける", effect: "illness-magic-treatment" },
+      { label: "町医者の治療を受ける（5G）", effect: "illness-ordinary-treatment" },
+      { label: "聖職者の治療を受ける（20G）", effect: "illness-magic-treatment" },
       { label: "自宅で療養する", effect: "illness-home-care" },
       { label: "治療を受けない", effect: "illness-no-treatment" },
     ],
@@ -2470,6 +2556,39 @@ export const CHOICE_EVENTS = [
     requirements: { minAge: 18, nationIds: ["empire", "kingdom"] },
     copy: "国境の緊張が高まり、守備隊から協力を求められた。危険を承知で参加するか、家族と町に残るか。",
     choices: [{ label: "守備隊に加わる", effect: "join-guard" }, { label: "町に残り、家族を支える", effect: "stay-home" }],
+  },
+  {
+    id: "choice-demon-king", title: "魔王討伐への招集", category: "国家・戦争・冒険", weight: 10, priority: true,
+    requirements: {
+      minAge: 45, maxAge: 50, oncePerLife: true,
+      occupations: ["兵士", "冒険者", "魔術師"],
+      custom: (life) => life.demonKingActive === true,
+    },
+    copy: "魔王討伐に向けて兵士が招集されている。あなたには参加資格がある。",
+    choices: [
+      {
+        label: "討伐に参加する（名声+20・賞金+200G）",
+        effect: "demon-king-join",
+        preview: ["費用: なし", "メリット: 名声+20、賞金+200G", "危険度: 怪我や死亡の可能性"],
+      },
+      { label: "参加しない", effect: "demon-king-decline", preview: ["費用: なし", "何も得られない"] },
+    ],
+  },
+  {
+    id: "choice-demon-relief", title: "傷ついた兵士への慰問", category: "国家・戦争・冒険", weight: 10, priority: true,
+    requirements: {
+      minAge: 45, maxAge: 50, oncePerLife: true, occupations: ["聖職者"],
+      custom: (life) => life.demonKingActive === true,
+    },
+    copy: "魔王討伐で傷ついた兵士に慰問を行いますか？",
+    choices: [
+      {
+        label: "慰問を行う（名声+30・報酬+50G）",
+        effect: "demon-relief",
+        preview: ["費用: なし", "メリット: 名声+30、報酬+50G", "危険度: 病気や精神的トラウマの可能性"],
+      },
+      { label: "行わない", effect: "demon-relief-decline", preview: ["費用: なし", "何も得られない"] },
+    ],
   },
   {
     id: "choice-dungeon", title: "ダンジョンへの誘い", category: "国家・戦争・冒険", weight: 8, priority: true,
@@ -2519,7 +2638,7 @@ export function decorateChoice(life, choice) {
   if (!rule) return { ...choice, preview: compactChoicePreview(choice.preview) };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
-  const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
+  const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer, rule.allowBorrow);
   const preview = choice.preview?.length ? choice.preview : rule.preview?.(life, cost);
   return { ...choice, cost, payer, preview: compactChoicePreview(preview), disabledReason };
 }
@@ -2529,7 +2648,7 @@ export function choiceAvailability(life, effect) {
   if (!rule) return { cost: 0, disabledReason: null };
   const cost = ruleCost(life, rule);
   const payer = rulePayer(life, rule);
-  const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer);
+  const disabledReason = rule.check?.(life) ?? insufficientFundsReason(life, cost, payer, rule.allowBorrow);
   return { cost, payer, disabledReason };
 }
 
@@ -2558,6 +2677,8 @@ function decisionFor(life, random) {
   const eligible = availableChoiceEvents(life);
   const firstChildChoice = eligible.find((event) => event.id === "choice-children" && life.childDecisionOffered !== true);
   if (firstChildChoice) return buildDecision(life, firstChildChoice, random);
+  const demonKingChoice = eligible.find((event) => ["choice-demon-king", "choice-demon-relief"].includes(event.id));
+  if (demonKingChoice) return buildDecision(life, demonKingChoice, random);
   const priority = eligible.filter((event) => event.priority);
   const urgent = priority.filter((event) => event.id !== "choice-dungeon");
   const pool = urgent.length > 0 ? urgent : priority.length > 0 ? priority : eligible;
@@ -2611,7 +2732,7 @@ function decisionFor(life, random) {
       title: "進む道",
       copy: "将来について考える時が来ました。興味のある道を選んでみましょう。",
       choices: [
-        { label: "職業技能を磨く", effect: "work-practice" },
+        { label: "5Gを払い、玄人から仕事のコツを学ぶ", effect: "work-mentor-training" },
         { label: "学びを続けて備える", effect: "study" },
       ],
     },
@@ -2619,7 +2740,7 @@ function decisionFor(life, random) {
       title: "仕事との向き合い方",
       copy: "今の職業を続けるか、仕事の技能を磨くかを決めましょう。",
       choices: [
-        { label: "職業技能を磨く", effect: "work-practice" },
+        { label: "5Gを払い、玄人から仕事のコツを学ぶ", effect: "work-mentor-training" },
         { label: "今の仕事を続ける", effect: "steady" },
       ],
     },
@@ -2642,9 +2763,9 @@ function decisionFor(life, random) {
   };
   const fallback = options[stage];
   if (!fallback) return null;
-  if (fallback.choices[0].effect === "work-practice"
+  if (fallback.choices[0].effect === "work-mentor-training"
     && ((life.occupationSkill ?? 0) >= 20 || NON_WORKING.includes(life.occupation)
-      || hasRecentEvent(life, "choice-work-practice", TUNING.decisionCooldownYears))) return null;
+      || hasRecentEvent(life, "choice-work-mentor", TUNING.decisionCooldownYears))) return null;
   const id = `choice-fallback-${stage}`;
   if (hasRecentEvent(life, id, TUNING.decisionCooldownYears)
     || (stage === "elder" && (life.eventHistory ?? []).some((event) => event.id === id))) return null;
@@ -2668,7 +2789,7 @@ function completeIllnessTreatment(life, choice, random) {
   const successRate = TUNING.treatmentSuccess[illness.type]?.[treatment] ?? 0;
   if (random() >= successRate) {
     life.illness.treatmentAttempts = (life.illness.treatmentAttempts ?? 0) + 1;
-    life.illnessUntil = Math.max(life.illnessUntil, life.age + 0.25);
+    life.illnessUntil = Math.max(life.illnessUntil, life.age + illnessReviewInterval(illness));
     return `${illness.name}の治療は成功しなかった。直ちに命を落とすことはなく、療養を続ける。`;
   }
 
@@ -2688,6 +2809,10 @@ function completeIllnessTreatment(life, choice, random) {
   life.lastIllnessRecoveryAt = life.age;
   life.illness = null;
   return `${illness.name}の治療に成功した。${sequela ?? "後遺症は残らなかった。"}`;
+}
+
+function illnessReviewInterval(illness) {
+  return ["fracture", "severeInjury"].includes(illness?.type) ? TUNING.injuryReviewYears : 0.5;
 }
 
 export function applyChoice(life, choice, random = Math.random) {
@@ -2715,8 +2840,15 @@ export function applyChoice(life, choice, random = Math.random) {
       life.parents.gold -= availability.cost;
       notes.push(`親の財産から${gold(availability.cost)}を支払った`);
     } else {
-      life.gold -= availability.cost;
-      recordGold(life, selected.label, -availability.cost);
+      const paid = Math.min(Math.max(0, life.gold), availability.cost);
+      life.gold -= paid;
+      recordGold(life, selected.label, -paid);
+      const borrowed = availability.cost - paid;
+      if (borrowed > 0) {
+        life.debt = (life.debt ?? 0) + borrowed;
+        recordGold(life, `${selected.label}の借入`, borrowed);
+        notes.push(`不足分${gold(borrowed)}を借り入れた`);
+      }
     }
   }
   let message;
@@ -2958,9 +3090,9 @@ export function applyChoice(life, choice, random = Math.random) {
       life.educationStatus = "就職先を探している";
       message = "すぐには就職せず、進路を考える時間を取ることにした。";
       break;
-    case "work-practice":
-      addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 1, "仕事への取り組み");
-      message = `${occupationTitle(life)}の技能を1伸ばすことに集中した。`;
+    case "work-mentor-training":
+      addSkillPoints(life, OCCUPATION_SKILLS[life.occupation] ?? "general", 4, "玄人の助言");
+      message = `その道の玄人に5Gを払い、${occupationTitle(life)}の仕事のコツを学んだ。`;
       break;
     case "steady":
       message = `${life.occupation}の仕事と今の暮らしを続けることにした。`;
@@ -3044,6 +3176,31 @@ export function applyChoice(life, choice, random = Math.random) {
     }
     case "dungeon-decline":
       message = "ダンジョンには向かわず、危険を避けて日常を続けた。";
+      break;
+    case "demon-king-join":
+      life.gold += 200;
+      life.fame += 20;
+      recordGold(life, "魔王討伐の賞金", 200);
+      defeatDemonKing(life, random);
+      life.demonKingHazardPending = true;
+      message = "討伐隊に加わり、魔王を倒した。賞金を受け取り、名声が高まった。";
+      break;
+    case "demon-king-decline":
+      message = "魔王討伐への参加を見送り、今の暮らしを続けることにした。";
+      break;
+    case "demon-relief":
+      life.gold += 50;
+      life.fame += 30;
+      recordGold(life, "兵士慰問の報酬", 50);
+      if (random() < TUNING.clericTraumaChance) {
+        startIllness(life, "trauma", "中等症", "傷ついた兵士を慰問し、精神的トラウマを負った。");
+        message = "傷ついた兵士を慰問し、報酬と名声を得た。兵士の苦しみに触れ、精神的トラウマを負った。";
+      } else {
+        message = "傷ついた兵士を慰問し、報酬と名声を得た。";
+      }
+      break;
+    case "demon-relief-decline":
+      message = "兵士への慰問を見送った。";
       break;
     case "risky-contract":
       if (random() < 0.62) {
@@ -3196,11 +3353,12 @@ export function applyChoice(life, choice, random = Math.random) {
     }
     case "illness-home-care":
       if (life.illness) life.illness.homeCare = true;
-      life.illnessUntil = Math.max(life.illnessUntil ?? 0, life.age + 0.25);
+      life.illnessUntil = Math.max(life.illnessUntil ?? 0, life.age + illnessReviewInterval(life.illness));
       message = `${life.illness?.name ?? "病気"}の治療は受けず、自宅で療養することにした。`;
       break;
     case "illness-no-treatment":
       if (life.illness) life.illness.noTreatment = true;
+      if (life.illness) life.illnessUntil = Math.max(life.illnessUntil ?? 0, life.age + illnessReviewInterval(life.illness));
       message = `${life.illness?.name ?? "病気"}の治療を受けず、経過を見守ることにした。`;
       break;
     case "train-magic": {
@@ -3486,6 +3644,7 @@ export function applyChoice(life, choice, random = Math.random) {
   life.nextDecisionAt = Number.isFinite(firstChildDecisionAt)
     ? firstChildDecisionAt
     : life.age + rollExponential(TUNING.decisionMeanYears, random);
+  if (life.illness && life.illness.severity !== "軽症") life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age);
   if (life.occupation === "家業の手伝い" && life.careerCrossroads && !hasFlag(life, "first-career-done")) {
     life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age + 0.05);
   }
@@ -3504,6 +3663,47 @@ function annualIllnessRate(age) {
 
 function deathRate(age) {
   return annualRateForAge(age, AGE_DEATH_RATES);
+}
+
+function raiseDemonKing(life) {
+  life.demonKingStarted = true;
+  life.demonKingActive = true;
+  life.demonKingRiseAt = Infinity;
+  life.world ??= { situation: "平和", since: life.age, nextChangeAt: life.age + 6 };
+  life.world.situation = "魔王君臨";
+  life.world.since = life.age;
+  life.world.nextChangeAt = life.age + TUNING.demonKingDurationYears;
+  life.situation = "魔王君臨";
+  appendEvent(life, WORLD_TEXT["魔王君臨"](life), "world", "世界情勢", "demon-king-rise");
+  life.nextDecisionAt = Math.min(life.nextDecisionAt ?? Infinity, life.age);
+}
+
+function defeatDemonKing(life, random) {
+  life.demonKingActive = false;
+  life.demonKingDefeated = true;
+  life.world ??= { situation: "平和", since: life.age, nextChangeAt: life.age + 6 };
+  life.world.situation = "平和";
+  life.world.since = life.age;
+  life.world.nextChangeAt = life.age + 3 + rollExponential(7, random);
+  life.situation = "平和";
+  appendEvent(life, WORLD_END_TEXT["魔王君臨"], "world", "世界情勢", `world-end-demon-king-${Math.floor(life.age)}`);
+}
+
+function startIllness(life, type, severity, text) {
+  const disease = DISEASE_TYPES.find((item) => item.id === type);
+  if (!disease) return;
+  const duration = TUNING.illnessSeverityWeights.find((item) => item.name === severity)?.duration ?? 0.4;
+  life.illness = { type, name: disease.name, severity, since: life.age, duration };
+  life.illnessUntil = life.age + duration;
+  life.health = "療養中";
+  appendEvent(
+    life,
+    `${text ?? `${disease.name}（${severity}）を発症した。`} 未治療時の年間致死率は約${Math.round(TUNING.illnessFatalityPerYearWhileIll * 100)}%。`,
+    "world",
+    type === "trauma" ? "精神的な不調" : "病気・怪我",
+    `hazard-illness-${Math.floor(life.age * 4)}-${type}`,
+  );
+  if (severity !== "軽症") life.nextDecisionAt = Math.min(life.nextDecisionAt ?? Infinity, life.age);
 }
 
 function settleInheritance(life) {
@@ -3596,7 +3796,9 @@ function die(life, cause) {
   life.deathCause = cause;
   life.deathAge = life.age;
   const heirs = settleInheritance(life);
-  const detail = heirs.length
+  const detail = life.will?.type === "friends-equal"
+    ? ` 相続財産${gold(life.inheritanceEstate)}を存命の友人に均等に分けた。`
+    : heirs.length
     ? ` 相続財産${gold(life.inheritanceEstate)}を${heirs.map((heir) => `${heir.name}へ${gold(heir.amount)}`).join("、")}分けた。`
     : ` 借金を清算した後の財産は${life.inheritanceTo}へ帰属した。`;
   const titleDetail = life.titleSuccession
@@ -3613,6 +3815,18 @@ function resolveHazards(life, elapsed, random) {
     life.age = life.maxHumanAge;
     die(life, "老衰");
     return;
+  }
+
+  if (life.demonKingHazardPending) {
+    life.demonKingHazardPending = false;
+    if (random() < TUNING.participationFatality) {
+      die(life, "魔王討伐戦");
+      return;
+    }
+    if (random() < TUNING.participationInjuryChance) {
+      const injury = random() < 0.5 ? "fracture" : "severeInjury";
+      startIllness(life, injury, "重症", "魔王討伐で大きな怪我を負った。");
+    }
   }
 
   // Ordinary death checks follow the provisional order: old age, accident, then illness.
@@ -3641,8 +3855,11 @@ function resolveHazards(life, elapsed, random) {
       die(life, "事故");
       return;
     }
-    life.health = random() < 0.35 ? "療養中" : life.health;
-    appendEvent(life, "仕事や移動の途中で事故に遭ったが、命に別状はなかった。", "world", "事故", "hazard-accident");
+    if (random() < 0.35) {
+      startIllness(life, random() < 0.5 ? "fracture" : "severeInjury", "中等症", "仕事や移動の途中で事故に遭い、怪我を負った。");
+    } else {
+      appendEvent(life, "仕事や移動の途中で事故に遭ったが、命に別状はなかった。", "world", "事故", "hazard-accident");
+    }
   }
 
   if (life.age < life.illnessUntil && random() < TUNING.illnessFatalityPerYearWhileIll * elapsed) {
@@ -3653,13 +3870,14 @@ function resolveHazards(life, elapsed, random) {
   const recoveredRecently = life.lastIllnessRecoveryAt != null && age - life.lastIllnessRecoveryAt < 2;
   if (life.age >= life.illnessUntil && !life.illness
     && random() < annualIllnessRate(age) * (recoveredRecently ? 0.5 : 1) * worldModifiers(life).illness * elapsed) {
-    const disease = weightedPick(DISEASE_TYPES, (item) => item.weight, random);
+    const disease = weightedPick(DISEASE_TYPES.filter((item) => item.weight > 0), (item) => item.weight, random);
     const severity = weightedPick(TUNING.illnessSeverityWeights, (item) => item.weight, random);
-    life.illness = { type: disease.id, name: disease.name, severity: severity.name, since: age, duration: severity.duration };
-    life.illnessUntil = age + severity.duration;
-    life.health = "療養中";
-    const decision = severity.name === "軽症" ? "休養を取り、症状は落ち着いている。" : "治療を受けるか、療養を続けるか決める必要がある。";
-    appendEvent(life, `${disease.name}（${severity.name}）を発症した。${decision}`, "world", "病気", `hazard-illness-${Math.floor(age)}`);
+    startIllness(
+      life,
+      disease.id,
+      severity.name,
+      `${disease.name}（${severity.name}）を発症した。${severity.name === "軽症" ? "休養を取り、症状は落ち着いている。" : "治療を受けるか、療養を続けるか決める必要がある。"}`,
+    );
   } else if (life.illness && life.age >= life.illnessUntil) {
     const recoveryChance = TUNING.naturalRecoveryChance[life.illness.severity] ?? 0;
     if (random() < recoveryChance) {
@@ -3671,8 +3889,19 @@ function resolveHazards(life, elapsed, random) {
     } else {
       const severityIndex = TUNING.illnessSeverityWeights.findIndex((item) => item.name === life.illness.severity);
       life.illness.severity = TUNING.illnessSeverityWeights[Math.min(severityIndex + 1, TUNING.illnessSeverityWeights.length - 1)].name;
-      life.illnessUntil = life.age + 0.5;
-      appendEvent(life, `${life.illness.name}の症状が続き、病状が重くなった。治療が必要になっている。`, "life", "病状の悪化", `illness-worsening-${Math.floor(age)}`);
+      life.illnessUntil = life.age + illnessReviewInterval(life.illness);
+      const injury = ["fracture", "severeInjury"].includes(life.illness.type);
+      const trauma = life.illness.type === "trauma";
+      appendEvent(
+        life,
+        injury
+          ? `以前負った怪我が悪化した。借金をしてでも治療を受けますか？未治療時の年間致死率は約${Math.round(TUNING.illnessFatalityPerYearWhileIll * 100)}%。`
+          : trauma
+            ? `精神的トラウマの症状が悪化した。治療を受けますか？未治療時の年間致死率は約${Math.round(TUNING.illnessFatalityPerYearWhileIll * 100)}%。`
+            : `${life.illness.name}の症状が続き、病状が重くなった。治療が必要になっている。`,
+        "life", "病状の悪化", `illness-worsening-${Math.floor(age)}`,
+      );
+      if (life.illness.severity !== "軽症") life.nextDecisionAt = Math.min(life.nextDecisionAt ?? Infinity, life.age);
     }
   } else if (life.health !== "健やか" && life.age >= life.illnessUntil) {
     life.health = "健やか";
@@ -3872,7 +4101,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
     const nextScheduled = Math.min(
       life.nextLogAt, life.nextDecisionAt, life.nextSocialAt ?? Infinity, life.maxHumanAge,
       life.trainingEndsAt ?? Infinity, life.world?.nextChangeAt ?? Infinity,
-      nextInfancyEvent(life)?.age ?? Infinity,
+      nextInfancyEvent(life)?.age ?? Infinity, life.demonKingRiseAt ?? Infinity,
     );
     const elapsed = Math.max(0, Math.min(remaining, nextScheduled - life.age));
     if (Number.isNaN(elapsed)) break;
@@ -3898,6 +4127,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       break;
     }
     if (life.world && life.age >= life.world.nextChangeAt) advanceWorld(life, random);
+    if (!life.demonKingStarted && life.age >= (life.demonKingRiseAt ?? Infinity)) raiseDemonKing(life);
     if (life.trainingEndsAt != null && life.age >= life.trainingEndsAt) finishTraining(life, random);
     updateCareerCrossroads(life);
     updateCareerReview(life, random);

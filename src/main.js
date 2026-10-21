@@ -506,8 +506,10 @@ function showEnding() {
     ["最期", life.deathCause],
     ["最後の仕事", occupationTitle(life)],
     ["死亡時の財産", money(life.inheritanceEstate ?? life.gold)],
-    ["相続", life.inheritance?.length
-      ? life.inheritance.map((heir) => `${heir.name} ${money(heir.amount)}`).join("、")
+    ["相続", life.will?.type === "friends-equal"
+      ? "存命の友人に均等に分配"
+      : life.inheritance?.length
+        ? life.inheritance.map((heir) => `${heir.name} ${money(heir.amount)}`).join("、")
       : life.inheritanceTo ?? "相続先なし"],
     ["清算した借金", money(life.debtSettledAtDeath ?? 0)],
     ["爵位継承", life.titleSuccession?.heirName ?? life.titleSuccession?.destination ?? "該当なし"],
