@@ -554,6 +554,8 @@ export function createLife(random = Math.random) {
 }
 
 function appendEvent(life, text, kind = "life", label = "人生", id = null) {
+  life.journal ??= [];
+  life.eventHistory ??= [];
   const event = { age: life.age, text: asText(text), kind, label, id };
   life.journal.push(event);
   life.eventCount += 1;
@@ -1349,7 +1351,8 @@ function processMonth(life, random) {
   life.finance.totalExpense += budget.totalExpense + budget.repayment + budget.scholarshipRepayment;
   life.finance.lastMonth = { age: life.age, ...budget };
   const expenseLogDue = life.finance.lastExpenseLogAt == null || life.age - life.finance.lastExpenseLogAt >= 1;
-  if (budget.net < -0.1 && (previousGold > life.gold || borrowedThisMonth > 0) && life.age >= 15 && expenseLogDue) {
+  if (budget.net < -0.1 && (previousGold > life.gold || borrowedThisMonth > 0 || life.financialHardship)
+    && life.age >= 15 && expenseLogDue) {
     const expenses = [
       ["生活費", budget.expenses.living],
       ["家賃", budget.expenses.rent],
@@ -1372,7 +1375,7 @@ function processMonth(life, random) {
     if (cashLoss > 0) recordGold(life, causes.join("・") || "家計の支出", -cashLoss);
     appendEvent(
       life,
-      `収入より支出が${gold(-budget.net)}多く、所持金が減った。主な要因: ${causes.join("、") || "毎月の家計"}。${borrowedThisMonth > 0 ? `${gold(borrowedThisMonth)}を借り入れた。` : life.debt >= TUNING.ordinaryDebtLimit ? "借入上限に達しており、これ以上は借りられない。" : ""}`,
+      `人間換算${Math.floor(life.age)}年目は収入より支出が${gold(-budget.net)}多く、所持金が減った。主な要因: ${causes.join("、") || "毎月の家計"}。${borrowedThisMonth > 0 ? `${gold(borrowedThisMonth)}を借り入れた。` : life.debt >= TUNING.ordinaryDebtLimit ? "借入上限に達しており、これ以上は借りられない。" : ""}`,
       "life", "家計", `finance-expense-${Math.floor(life.age)}`,
     );
     life.finance.lastExpenseLogAt = life.age;
@@ -2525,7 +2528,7 @@ export const CHOICE_EVENTS = [
   {
     id: "choice-illness-treatment", title: "病気の治療", category: "病気・事故", weight: 1, priority: true,
     requirements: {
-      minAge: 13, healthStates: ["療養中"],
+      minAge: 0, healthStates: ["療養中"],
       custom: (life) => life.illness && life.illness.severity !== "軽症",
     },
     copy: (life) => `${life.illness?.name ?? "病気・怪我"}（${life.illness?.severity ?? "症状あり"}）の治療をどうするか決める。治療しない場合、年間約${Math.round(TUNING.illnessFatalityPerYearWhileIll * 100)}%の確率で命を落とす可能性がある。`,
@@ -2824,6 +2827,7 @@ export function applyChoice(life, choice, random = Math.random) {
   if (availability.disabledReason) return null;
 
   ensureSkillState(life);
+  const illnessBeforeChoice = life.illness;
   const before = {
     gold: life.gold,
     parentGold: life.parents?.gold ?? 0,
@@ -3644,7 +3648,9 @@ export function applyChoice(life, choice, random = Math.random) {
   life.nextDecisionAt = Number.isFinite(firstChildDecisionAt)
     ? firstChildDecisionAt
     : life.age + rollExponential(TUNING.decisionMeanYears, random);
-  if (life.illness && life.illness.severity !== "軽症") life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age);
+  if (life.illness && life.illness !== illnessBeforeChoice && life.illness.severity !== "軽症") {
+    life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age);
+  }
   if (life.occupation === "家業の手伝い" && life.careerCrossroads && !hasFlag(life, "first-career-done")) {
     life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age + 0.05);
   }
@@ -3857,6 +3863,7 @@ function resolveHazards(life, elapsed, random) {
     }
     if (random() < 0.35) {
       startIllness(life, random() < 0.5 ? "fracture" : "severeInjury", "中等症", "仕事や移動の途中で事故に遭い、怪我を負った。");
+      (life.eventHistory ??= []).push({ id: "hazard-accident", age: life.age });
     } else {
       appendEvent(life, "仕事や移動の途中で事故に遭ったが、命に別状はなかった。", "world", "事故", "hazard-accident");
     }

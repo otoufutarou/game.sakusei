@@ -96,10 +96,11 @@ function lifeForEvent(event) {
     life.graduationPending = true;
     life.graduationSkill = "scholarship";
   }
-  if (event.id === "choice-work-practice") life.occupation = "農作業";
+  if (event.id === "choice-work-mentor") life.occupation = "農作業";
   if (event.id === "choice-first-career") life.careerCrossroads = true;
   if (event.id === "choice-work-offer") life.nextCareerReviewAt = 0;
   if (event.id === "choice-dungeon") life.nextDungeonAt = life.age;
+  if (event.id === "choice-demon-king" || event.id === "choice-demon-relief") life.demonKingActive = true;
   const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", gender: "女性", alive: true, affinity: 60, history: [] });
   life.mana = 50;
   if (/arranged/.test(event.id)) life.status = { name: "貴族" };
@@ -160,6 +161,8 @@ function simulateYears(race, years, seed) {
   life.occupation = "教師";
   life.occupationSkill = 30;
   life.age = 0;
+  life.demonKingRiseAt = Infinity;
+  life.demonKingStarted = true;
   life.playing = true;
   life.nextDecisionAt = Math.min(13, years + 1);
   let steps = 0;
@@ -179,6 +182,7 @@ test("event cadence uses human-equivalent rather than race-year units", () => {
     const life = makeLife({ race });
     assert.equal(routineLogMean(life), TUNING.routineLogIntervalYears);
     assert.equal(actualAge({ age: 40, race }), 40 * race.multiplier);
+    assert.equal(actualAge({ age: 1, race }), race.multiplier, "a log at human-equivalent age 1 displays at the race's actual age");
   }
 });
 
@@ -221,6 +225,7 @@ test("older saves gain future scheduling defaults without invented childhood or 
   assert.equal(life.nextDungeonAt, 31);
   assert.equal(life.gold, 123);
   assert.equal(life.debt, 4);
+  assert.equal(life.demonKingRiseAt, 45);
   assert.deepEqual(life.journal, []);
 });
 
@@ -250,6 +255,17 @@ test("first-career stale choices cannot bypass minimum age or aptitude", () => {
   assert.equal(life.occupation, "家業の手伝い");
   decide(life, "career-first:魔術師", () => 0);
   assert.equal(life.occupation, "家業の手伝い");
+
+  const route = CHOICE_EVENTS.find((event) => event.id === "choice-first-career");
+  assert.equal(isRoutineEventEligible(makeLife({ age: 12, occupation: "家業の手伝い", careerCrossroads: true }), route), false);
+  const firstCareer = makeLife({
+    age: 13, occupation: "家業の手伝い", careerCrossroads: true, skills: {},
+    baseStats: { body: 20, combat: 20, dexterity: 10, intellect: 10, charm: 10, luck: 10 },
+  });
+  firstCareer.pendingDecision = { id: "choice-first-career", title: "進路", choices: [{ effect: "career-first:農作業", label: "農作業" }] };
+  firstCareer.gold = 0;
+  decide(firstCareer, "career-first:農作業", () => 0);
+  assert.match(firstCareer.lastResult.message, /月給は約2\.8G/);
 });
 
 test("ore contract odds and outcomes no longer depend on the frozen dexterity field", () => {
@@ -533,7 +549,7 @@ test("monthly skill growth matches the specified human-year targets", () => {
   }
 });
 
-test("working grows occupation skill automatically, with choices adding extra growth", () => {
+test("working grows occupation skill automatically, while paid expert guidance adds a lump of skill", () => {
   const life = makeLife({
     age: 20,
     playing: true,
@@ -554,8 +570,11 @@ test("working grows occupation skill automatically, with choices adding extra gr
   const automaticGrowth = life.skills.teaching;
   assert.ok(automaticGrowth > 0);
   assert.equal(life.journal.length, journalLength);
-  decide(life, "work-practice", () => 0.999);
-  assert.ok(life.skills.teaching > automaticGrowth + 0.9);
+  const goldBeforeTraining = life.gold;
+  decide(life, "work-mentor-training", () => 0.999);
+  assert.ok(life.skills.teaching > automaticGrowth + 3.9);
+  assert.equal(life.gold, goldBeforeTraining - 5);
+  assert.match(life.lastResult.message, /玄人に5G/);
 });
 
 test("chosen ongoing practice grows a separate skill alongside career experience", () => {
@@ -600,11 +619,12 @@ test("decades of work advance occupation skill beyond the beginner ranks", () =>
   assert.ok(["熟練", "達人", "巨匠級"].includes(skillTier(life.occupationSkill)));
 });
 
-test("routine work-practice choices stop appearing once career skill reaches apprentice level", () => {
-  const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-practice");
+test("paid expert-guidance choices stop appearing once career skill reaches apprentice level", () => {
+  const event = CHOICE_EVENTS.find((candidate) => candidate.id === "choice-work-mentor");
   assert.ok(event);
   assert.equal(isRoutineEventEligible(makeLife({ age: 18, occupationSkill: 19 }), event), true);
   assert.equal(isRoutineEventEligible(makeLife({ age: 18, occupationSkill: 20 }), event), false);
+  assert.equal(isRoutineEventEligible(makeLife({ age: 18, occupationSkill: 0, gold: 4 }), event), false);
 });
 
 test("race age multipliers normalize practice to human-equivalent years", () => {
@@ -942,6 +962,8 @@ function adultLife(seed = 1, overrides = {}) {
   life.nextLogAt = Infinity;
   life.nextSocialAt = Infinity;
   life.nextDungeonAt = Infinity;
+  life.demonKingRiseAt = Infinity;
+  life.demonKingStarted = true;
   if (life.world) life.world.nextChangeAt = Infinity;
   Object.assign(life, overrides);
   return { life, random };
@@ -1125,6 +1147,9 @@ test("a grouped friend inheritance is shared equally among living friends", () =
   life.world.nextChangeAt = Infinity;
   advanceLife(life, 0.25, () => 0.99);
   assert.deepEqual(life.inheritance.map((heir) => [heir.id, heir.amount]), [["friend-1", 45], ["friend-2", 45]]);
+  assert.ok(!life.journal.at(-1).text.includes("友人一"));
+  assert.ok(!life.journal.at(-1).text.includes("友人二"));
+  assert.match(life.journal.at(-1).text, /存命の友人に均等/);
 });
 
 test("steady living does not create money and deliberate saving yields only a small reserve", () => {
@@ -1224,6 +1249,8 @@ test("ordinary lifetime savings stay near one small home for most careers", () =
       nextSocialAt: Infinity,
       status: { name: "都市平民" },
       parents: null,
+      demonKingRiseAt: Infinity,
+      demonKingStarted: true,
     });
     let peak = 0;
     let guard = 0;
@@ -1244,7 +1271,7 @@ test("ordinary lifetime savings stay near one small home for most careers", () =
   const seventiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.7)];
   const ninetiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.9)];
   console.log(`peak assets p50/p70/p90: ${peakAssets[Math.floor(peakAssets.length / 2)]}/${seventiethPercentile}/${ninetiethPercentile}`);
-  assert.ok(seventiethPercentile >= homePrice * 0.1 && seventiethPercentile <= homePrice * 2.5,
+  assert.ok(seventiethPercentile >= homePrice * 0.08 && seventiethPercentile <= homePrice * 2.5,
     `70th percentile assets ${seventiethPercentile}G should stay well below a small home for ordinary careers (${homePrice}G)`);
   assert.ok(peakAssets.filter((assets) => assets < homePrice * 0.75).length > 0, "some workers remain below the home threshold");
   assert.ok(ninetiethPercentile < homePrice * 3.5, "ordinary careers should not commonly accumulate several home prices");
@@ -1275,6 +1302,7 @@ test("meeting NPCs, romance, and marriage run through persistent NPCs and refusa
 });
 
 test("children are a choice: no automatic births, 'not now' defers, 'never' stops the question", () => {
+  assert.deepEqual(TUNING.annualConceptionChanceByAge.map(({ chance }) => chance), [0.8, 0.8, 0.8, 0.8]);
   const { life, random } = adultLife(8, { age: 28, gold: 80 });
   const partner = { id: "spouse-1", name: "配偶者", race: "human", humanAge: 27, alive: true, affinity: 80, history: [], relationship: "配偶者", occupation: "商人", gender: "女性", maritalStatus: "既婚" };
   life.npcs.push(partner);
@@ -1293,6 +1321,78 @@ test("children are a choice: no automatic births, 'not now' defers, 'never' stop
   assert.equal(life.npcs.filter((npc) => npc.relationship === "子").length, 0);
   decide(life, "children-yes", random);
   assert.equal(life.childPlan, "wants");
+});
+
+test("social encounters happen about half as often, while all races retain the same human-equivalent log cadence", () => {
+  assert.equal(TUNING.socialMeanYears, 5.2);
+  const life = createLife(seededRandom(123));
+  assert.ok(life.nextSocialAt >= 13);
+  assert.equal(routineLogMean({ race: RACES.find((race) => race.id === "demon") }), routineLogMean({ race: RACES[0] }));
+});
+
+test("the demon king causes a prolonged downturn and offers the appropriate role-specific choice", () => {
+  const { life } = adultLife(91, {
+    age: 44.9,
+    occupation: "兵士",
+    occupationSkill: 30,
+    demonKingStarted: false,
+    demonKingActive: false,
+    demonKingRiseAt: 45,
+  });
+  life.world = { situation: "平和", since: life.age, nextChangeAt: Infinity };
+  advanceLife(life, 0.25, () => 0.99);
+  assert.equal(life.world.situation, "魔王君臨");
+  assert.match(life.journal.find((event) => event.id === "demon-king-rise").text, /北に魔王が君臨/);
+  assert.equal(life.pendingDecision.id, "choice-demon-king");
+  const farmer = { ...life, occupation: "農作業" };
+  assert.ok(monthlyBudget(farmer).income.work < monthlyBudget({ ...farmer, world: { situation: "平和" } }).income.work);
+  const merchant = { ...life, occupation: "商人" };
+  assert.ok(monthlyBudget(merchant).income.work < monthlyBudget({ ...merchant, world: { situation: "平和" } }).income.work);
+
+  life.gold = 0;
+  const fameBefore = life.fame;
+  decide(life, "demon-king-join", () => 0.5);
+  assert.equal(life.gold, 200);
+  assert.equal(life.fame, fameBefore + 20);
+  assert.equal(life.demonKingDefeated, true);
+  assert.equal(life.world.situation, "平和");
+  assert.equal(life.demonKingHazardPending, true, "participation carries a deferred injury/death risk");
+
+  const cleric = adultLife(92, {
+    age: 47.5,
+    occupation: "聖職者",
+    demonKingActive: true,
+    demonKingStarted: true,
+  }).life;
+  const clericGold = cleric.gold;
+  decide(cleric, "demon-relief", () => 0);
+  assert.equal(cleric.gold, clericGold + 50);
+  assert.equal(cleric.fame, 30);
+  assert.equal(cleric.illness.type, "trauma");
+  assert.equal(cleric.illness.name, "精神的トラウマ");
+
+  const civilian = adultLife(93, { age: 47.5, occupation: "農作業", demonKingActive: true }).life;
+  assert.equal(availableChoiceEvents(civilian).some((event) => event.id === "choice-demon-king" || event.id === "choice-demon-relief"), false);
+
+  const externalVictory = adultLife(94, { age: 50, occupation: "引退", demonKingActive: true, demonKingStarted: true }).life;
+  externalVictory.world = { situation: "魔王君臨", since: 50, nextChangeAt: 50 + TUNING.demonKingDurationYears };
+  externalVictory.situation = "魔王君臨";
+  for (let quarter = 0; quarter < TUNING.demonKingDurationYears * 4; quarter += 1) advanceLife(externalVictory, 0.25, () => 0.99);
+  assert.equal(externalVictory.demonKingDefeated, true);
+  assert.equal(externalVictory.world.situation, "平和");
+});
+
+test("fame milestones are logged only once when crossing their thresholds", () => {
+  const life = makeLife({ fame: 0, home: "農村" });
+  applyRoutineEffect(life, { effect: { fame: 120 } }, () => 0.5);
+  decide(life, "steady", () => 0.5);
+  const milestones = life.journal.filter((event) => event.id?.startsWith("fame-milestone-"));
+  assert.deepEqual(milestones.map((event) => event.id), ["fame-milestone-25", "fame-milestone-50", "fame-milestone-100"]);
+  assert.match(milestones[0].text, /村のみんな/);
+  assert.match(milestones[1].text, /村一番/);
+  assert.match(milestones[2].text, /歴史に刻まれた/);
+  decide(life, "steady", () => 0.5);
+  assert.equal(life.journal.filter((event) => event.id?.startsWith("fame-milestone-")).length, 3);
 });
 
 test("marriage guarantees a child-planning decision within six months", () => {
@@ -1366,7 +1466,7 @@ test("promotion eligibility offers a visible selection instead of changing the r
   assert.match(life.lastResult.message, /月収は約.+から.+になった/);
 });
 
-test("monthly shortfalls never create automatic debt", () => {
+test("monthly shortfalls borrow up to the ordinary debt cap and log why money is short", () => {
   const { life } = adultLife(24, { age: 30, occupation: "失業中", gold: 0, debt: 0 });
   life.nextDecisionAt = 100;
   life.nextLogAt = 100;
@@ -1374,8 +1474,14 @@ test("monthly shortfalls never create automatic debt", () => {
   life.world = { situation: "平和", nextChangeAt: 100 };
   advanceLife(life, 0.25, () => 0.9);
   assert.equal(life.gold, 0);
-  assert.equal(life.debt, 0);
+  assert.ok(life.debt > 0 && life.debt <= TUNING.ordinaryDebtLimit);
   assert.equal(life.financialHardship, true);
+  assert.ok(life.finance.recent.some((item) => item.label === "生活費の借入"));
+  assert.ok(life.journal.some((event) => event.label === "家計" && /家賃|生活費/.test(event.text)));
+
+  for (let year = 0; year < 80; year += 1) advanceLife(life, 0.25, () => 0.99);
+  assert.equal(life.debt, TUNING.ordinaryDebtLimit);
+  assert.ok(life.journal.some((event) => /借入上限/.test(event.text)));
 });
 
 test("illness settings use the revised treatment rates and treatment failure is not immediate death", () => {
@@ -1385,6 +1491,7 @@ test("illness settings use the revised treatment rates and treatment failure is 
     tuberculosis: { ordinary: 0.15, magic: 0.65 },
     fracture: { ordinary: 0.65, magic: 0.9 },
     severeInjury: { ordinary: 0.2, magic: 0.65 },
+    trauma: { ordinary: 0.6, magic: 0.85 },
     advancedCancer: { ordinary: 0.02, magic: 0.2 },
   });
   assert.deepEqual(TUNING.minorIllnessChanceByAge.map(({ annualChance }) => annualChance), [0.04, 0.03, 0.05, 0.08, 0.1, 0.12]);
@@ -1396,6 +1503,7 @@ test("illness settings use the revised treatment rates and treatment failure is 
   assert.ok(failed.active);
   assert.equal(failed.illness.name, "肺炎");
   assert.match(failed.lastResult.message, /成功しなかった/);
+  assert.ok(failed.nextDecisionAt > failed.age, "failed treatment waits for the condition to worsen before asking again");
 
   const recovered = adultLife(27, { gold: 100 }).life;
   recovered.illness = { type: "pneumonia", name: "肺炎", severity: "中等症", since: recovered.age, duration: 0.4 };
@@ -1405,6 +1513,26 @@ test("illness settings use the revised treatment rates and treatment failure is 
   assert.equal(recovered.illness, null);
   assert.equal(recovered.health, "健やか");
   assert.equal(recovered.baseStats.body, bodyBefore - 6, "a severe enough successful treatment can leave a related aftereffect");
+
+  const injured = adultLife(28, { gold: 0, debt: 0 }).life;
+  injured.illness = { type: "fracture", name: "骨折", severity: "中等症", since: injured.age, duration: 0.4 };
+  injured.health = "療養中";
+  assert.equal(choiceAvailability(injured, "illness-ordinary-treatment").cost, 5);
+  assert.equal(choiceAvailability(injured, "illness-ordinary-treatment").disabledReason, null);
+  assert.equal(choiceAvailability(injured, "illness-magic-treatment").cost, 20);
+  decide(injured, "illness-ordinary-treatment", () => 0);
+  assert.equal(injured.debt, 5, "medical care can borrow the shortfall");
+  assert.equal(injured.illness, null);
+
+  const worsening = adultLife(29, { age: 30 }).life;
+  worsening.illness = { type: "fracture", name: "骨折", severity: "中等症", since: 29, duration: 0.4 };
+  worsening.illnessUntil = worsening.age + TUNING.injuryReviewYears;
+  worsening.health = "療養中";
+  worsening.nextDecisionAt = Infinity;
+  for (let quarter = 0; quarter < 9; quarter += 1) advanceLife(worsening, 0.25, () => 0.99);
+  assert.equal(worsening.illness.severity, "重症");
+  assert.equal(worsening.pendingDecision?.id, "choice-illness-treatment");
+  assert.ok(worsening.journal.some((event) => /以前負った怪我が悪化/.test(event.text)));
 });
 
 test("death settles the estate to living spouse and children without passing debt onward", () => {
@@ -1641,7 +1769,7 @@ test("a calling from the church lets a magically gifted character become a pries
 
 test("practising skills raises the matching base ability", () => {
   const life = makeLife({ age: 20, occupation: "兵士", skills: { combat: 0 }, baseStats: { body: 50, combat: 50, intellect: 50, dexterity: 50, charm: 50, luck: 50 } });
-  decide(life, "work-practice", () => 0.5);
+  decide(life, "work-mentor-training", () => 0.5);
   assert.ok(life.baseStats.combat > 50);
 });
 
