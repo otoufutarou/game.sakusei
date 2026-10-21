@@ -7,6 +7,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createLife } from "../src/simulation.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = "/game.sakusei/";
@@ -111,6 +112,10 @@ test("new life: hero is born, time runs, pause/resume, decisions, sprite, reload
   }
   assert.ok(maxAge > 0, "age advanced");
   assert.ok(Number(await page.textContent("#event-count")) > 0, "journal has entries");
+  assert.equal(await page.locator("#event-list .event-kind").count(), 0, "journal omits redundant entry labels");
+  assert.ok(await page.locator("#event-list .event-age").count() > 0, "journal retains ages");
+  assert.deepEqual(await page.locator("#event-list .event-content").allTextContents(),
+    await page.evaluate(() => window.__game.life.journal.slice(-4).reverse().map((event) => event.text)));
   assert.ok((await spriteInk(page)) > 3);
 
   // Pause stops time, resume restarts it.
@@ -146,6 +151,68 @@ test("new life: hero is born, time runs, pause/resume, decisions, sprite, reload
   await page.waitForFunction((before) => window.__game.life.age > before || window.__game.life.pendingDecision, savedAge, { timeout: 20000 });
 
   console.log(`# browser=${browser.version()} decisions=${decisions.length} maxAge=${maxAge.toFixed(1)} titles=${decisions.join("|")}`);
+  assert.deepEqual(problems, []);
+  await context.close();
+});
+
+test("occupation skill displays its own value and name, updates on job changes, and resets for a new life", { skip, timeout: 60000 }, async () => {
+  const saved = createLife(() => 0.5);
+  saved.started = true;
+  saved.age = 25;
+  saved.occupation = "農作業";
+  saved.occupationRole = "農作業";
+  saved.occupationSkill = 73.4;
+  saved.skills.farming = 73.4;
+  saved.skills.trade = 12.4;
+  saved.dexterity = 180;
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const { page, problems } = await open(context, { legacySave: JSON.stringify(saved) });
+  await page.click("#resume-life");
+  const row = page.locator('[data-stat-key="occupationSkill"]');
+  assert.equal(await page.locator('[data-stat-key="dexterity"]').count(), 0);
+  assert.equal(await row.locator("[data-stat-value]").textContent(), "73");
+  assert.equal(await row.locator(".ability-track").getAttribute("aria-valuenow"), "73");
+  const farmingLabel = await row.locator("[data-occupation-skill-label]").textContent();
+  assert.match(farmingLabel, /^職業技能（.+）$/);
+  await page.click("#open-status");
+  assert.ok((await page.textContent("#status-body")).includes(`${farmingLabel}73（熟練）`));
+  assert.ok(!(await page.textContent("#status-body")).includes("器用さ"));
+  await page.click('[data-close="status-dialog"]');
+
+  const transition = await page.evaluate(async (build) => {
+    const { chooseDecision } = await import(`/game.sakusei/src/simulation.js?v=${build}`);
+    const life = window.__game.life;
+    life.pendingDecision = {
+      id: "test-career-change",
+      title: "転職先を選ぶ",
+      choices: [{ label: "商人に移る", effect: "career-change:商人" }],
+    };
+    chooseDecision(life, "career-change:商人", () => 0.5);
+    life.playing = true;
+    return { occupation: life.occupation, skill: life.occupationSkill, trade: life.skills.trade };
+  }, BUILD);
+  assert.deepEqual(transition, { occupation: "商人", skill: 0, trade: 0 }, "a real cross-skill job transition resets the incoming skill");
+  await page.waitForFunction(() => document.querySelector('[data-stat-key="occupationSkill"] [data-stat-value]').textContent === "0");
+  await page.evaluate(() => {
+    window.__game.life.playing = false;
+    window.__game.life.pendingDecision = null;
+    document.getElementById("decision-dialog").close();
+  });
+  assert.notEqual(await row.locator("[data-occupation-skill-label]").textContent(), farmingLabel);
+  assert.equal(await row.locator("[data-stat-change]").textContent(), "−73");
+  assert.equal(await row.locator(".ability-track").getAttribute("aria-valuenow"), "0");
+
+  await page.click("#open-history");
+  assert.equal(await page.locator("#history-list .event-kind").count(), 0);
+  assert.deepEqual(await page.locator("#history-list .event-content").allTextContents(),
+    await page.evaluate(() => window.__game.life.journal.slice().reverse().map((event) => event.text)));
+  await page.click("#close-history");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.click("#new-life");
+  await page.waitForSelector("#prologue-dialog[open]");
+  assert.equal(await row.locator("[data-stat-value]").textContent(), "0");
+  assert.equal(await row.locator("[data-stat-change]").textContent(), "", "new life clears prior skill-change indicators");
+  assert.equal(await row.locator(".ability-track").getAttribute("aria-valuenow"), "0");
   assert.deepEqual(problems, []);
   await context.close();
 });

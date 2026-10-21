@@ -99,6 +99,7 @@ function lifeForEvent(event) {
   if (event.id === "choice-work-practice") life.occupation = "農作業";
   if (event.id === "choice-first-career") life.careerCrossroads = true;
   if (event.id === "choice-work-offer") life.nextCareerReviewAt = 0;
+  if (event.id === "choice-dungeon") life.nextDungeonAt = life.age;
   const person = (id, relationship, humanAge = 40) => ({ id, name: id, relationship, humanAge, race: "human", gender: "女性", alive: true, affinity: 60, history: [] });
   life.mana = 50;
   if (/arranged/.test(event.id)) life.status = { name: "貴族" };
@@ -191,6 +192,191 @@ test("a generated birth remains paused until the player starts life", () => {
   assert.equal(life.gold, 0, "family assets are not handed to the child as personal cash");
   assert.equal(life.debt, 0, "parents' debts are not assigned to the newborn");
   assert.ok(life.parents.gold >= 0, "family resources remain available as separate birth context");
+});
+
+test("infancy reliably explains race, lifespan, status and world without decisions", () => {
+  for (const race of RACES) {
+    const life = createLife(seededRandom(91));
+    Object.assign(life, { race, started: true, playing: true, nextLogAt: Infinity, nextSocialAt: Infinity });
+    life.world.nextChangeAt = Infinity;
+    while (life.age < 3) advanceLife(life, 0.25, () => 0.99);
+    const infancy = life.journal.filter((entry) => entry.id?.startsWith("infancy-"));
+    assert.deepEqual(infancy.map((entry) => entry.age), [0.5, 1, 2, 3]);
+    assert.match(infancy[0].text, new RegExp(`${race.lifespan}歳`));
+    assert.ok(infancy[0].text.includes(race.name));
+    assert.ok(infancy[1].text.includes(life.status.name));
+    assert.match(infancy[3].text, /魔術や魔物/);
+    assert.equal(life.pendingDecision, null);
+    const restored = deserializeLife(serializeLife(life));
+    restored.playing = true;
+    advanceLife(restored, 0.25, () => 0.99);
+    assert.equal(restored.journal.filter((entry) => entry.id?.startsWith("infancy-")).length, 4);
+  }
+});
+
+test("older saves gain future scheduling defaults without invented childhood or changed balances", () => {
+  const life = migrateLife({ race: "beastkin", nation: "kingdom", age: 30, gold: 123, debt: 4 });
+  assert.equal(life.childhoodContextThrough, 30);
+  assert.equal(life.dungeonOffers, 0);
+  assert.equal(life.nextDungeonAt, 31);
+  assert.equal(life.gold, 123);
+  assert.equal(life.debt, 4);
+  assert.deepEqual(life.journal, []);
+});
+
+test("new careers reset a different required skill, while same-skill transitions retain it", () => {
+  const life = makeLife({ skills: { craft: 42, farming: 18 }, gold: 100 });
+  decide(life, "open-shop-choice", () => 0.5);
+  assert.equal(life.occupation, "工房主");
+  assert.equal(life.occupationSkill, 42);
+  const choiceEvent = CHOICE_EVENTS.find((event) => event.id === "choice-work-offer");
+  const craftChoice = choiceEvent.choicesFor(life).find((choice) => choice.effect === "career-change:職人見習い");
+  assert.ok(craftChoice.preview.join("").includes("引き継げて有利"));
+  decide(life, "career-change:農作業", () => 0.5);
+  assert.equal(life.occupationSkill, 0);
+  assert.equal(life.skills.farming, 0);
+  assert.equal(life.skills.craft, 42, "unrelated learned skills remain recorded");
+  advanceSkills(life, 1);
+  assert.ok(life.occupationSkill > 0);
+  decide(life, "career-change:職人見習い", () => 0.5);
+  assert.equal(life.occupationSkill, 0, "switching back is also a different skill");
+  assert.equal(life.occupationRank, "初心者");
+  assert.ok(life.lastResult.details.some((detail) => detail.includes("技能-")));
+});
+
+test("first-career stale choices cannot bypass minimum age or aptitude", () => {
+  const life = makeLife({ age: 12, occupation: "家業の手伝い", skills: {}, baseStats: { body: 30, combat: 30 } });
+  decide(life, "career-first:冒険者", () => 0);
+  assert.equal(life.occupation, "家業の手伝い");
+  decide(life, "career-first:魔術師", () => 0);
+  assert.equal(life.occupation, "家業の手伝い");
+});
+
+test("ore contract odds and outcomes no longer depend on the frozen dexterity field", () => {
+  const apprentice = makeLife({ occupationSkill: 20, dexterity: 200 });
+  const expert = makeLife({ occupationSkill: 80, dexterity: 0 });
+  assert.match(decorateChoice(apprentice, { effect: "ore-contract" }).preview.join(""), /36%/);
+  assert.match(decorateChoice(expert, { effect: "ore-contract" }).preview.join(""), /84%/);
+  decide(apprentice, "ore-contract", () => 0.5);
+  decide(expert, "ore-contract", () => 0.5);
+  assert.equal(apprentice.gold, 22, "low skill fails despite high legacy dexterity");
+  assert.equal(expert.gold, 42, "high skill succeeds despite zero legacy dexterity");
+});
+
+test("poverty relief is a debt-free guild task for every occupation", () => {
+  assert.ok(!CHOICE_EVENTS.some((event) => event.id === "choice-business-loan"));
+  assert.ok(!ROUTINE_EVENTS.some((event) => event.id === "wealth-loan"));
+  for (const occupation of ["魔術師", "農作業", "商人"]) {
+    const life = makeLife({ occupation, gold: 0 });
+    assert.ok(availableChoiceEvents(life).some((event) => event.id === "choice-guild-herbs"));
+    decide(life, "gather-herbs", () => 0.5);
+    assert.equal(life.gold, 3);
+    assert.equal(life.debt, 0);
+    assert.equal(life.occupation, occupation);
+    assert.ok(choiceAvailability(life, "borrow-for-trade").disabledReason);
+  }
+});
+
+test("decision cooldowns survive journal churn and generic fallbacks have stable identities", () => {
+  const life = makeLife({
+    age: 30, gold: 2,
+    eventHistory: [{ id: "choice-guild-herbs", age: 29 }, { id: "choice-household-budget", age: 25 }],
+    journal: Array.from({ length: 25 }, (_, index) => ({ id: `unrelated-${index}` })),
+  });
+  assert.ok(!availableChoiceEvents(life).some((event) => ["choice-guild-herbs", "choice-household-budget"].includes(event.id)));
+  const { life: fallback } = adultLife(8, {
+    age: 17, occupation: "失業中", nextDecisionAt: 17, skills: {}, gold: 0,
+    eventHistory: CHOICE_EVENTS.map((event) => ({ id: event.id, age: 16 })),
+  });
+  advanceLife(fallback, 0.01, () => 0.99);
+  assert.equal(fallback.pendingDecision, null, "no repetitive job-practice fallback for a nonworker");
+  const { life: generic } = adultLife(9, {
+    age: 50, occupation: "引退", nextDecisionAt: 50, gold: 0,
+    eventHistory: CHOICE_EVENTS.map((event) => ({ id: event.id, age: 50 })),
+  });
+  advanceLife(generic, 0.01, () => 0.99);
+  assert.equal(generic.pendingDecision.id, "choice-fallback-middle");
+  chooseDecision(generic, "save", () => 0.99);
+  generic.journal = Array.from({ length: 25 }, (_, index) => ({ id: `unrelated-${index}` }));
+  generic.nextDecisionAt = generic.age;
+  advanceLife(generic, 0.01, () => 0.99);
+  assert.equal(generic.pendingDecision, null, "journal churn cannot bypass the stable fallback cooldown");
+});
+
+test("dungeon uses the exact 70/10/5/15 outcome intervals and never adds debt", () => {
+  const counts = { slime: 0, treasure: 0, dragon: 0, goblin: 0 };
+  for (let index = 0; index < 100; index += 1) {
+    const life = makeLife({ gold: 100 });
+    decide(life, "dungeon-enter", () => (index + 0.5) / 100);
+    const delta = life.gold - 100;
+    counts[delta === 1 ? "slime" : delta === 50 ? "treasure" : delta === -20 ? "dragon" : "goblin"] += 1;
+    assert.ok([1, 50, -20, -5].includes(delta));
+    assert.equal(life.debt, 0);
+    assert.equal(life.finance.recent.at(-1).amount, delta);
+  }
+  assert.deepEqual(counts, { slime: 70, treasure: 10, dragon: 5, goblin: 15 });
+  for (const roll of [0.8, 0.85]) {
+    const life = makeLife({ gold: 2 });
+    decide(life, "dungeon-enter", () => roll);
+    assert.equal(life.gold, 0);
+    assert.equal(life.debt, 0);
+  }
+});
+
+test("dungeon opportunities occur twice after adulthood, counting refusals and reloads", () => {
+  for (const race of RACES) {
+    const { life } = adultLife(99, { race, age: 21.75, nextDungeonAt: 22, nextDecisionAt: Infinity, occupation: "引退" });
+    advanceLife(life, 0.25, () => 0.99);
+    assert.equal(life.pendingDecision.id, "choice-dungeon-1");
+    assert.equal(life.age, 22);
+    chooseDecision(life, "dungeon-decline", () => 0.5);
+    const restored = deserializeLife(serializeLife(life));
+    Object.assign(restored, { playing: true, age: 47.75, nextDecisionAt: Infinity, nextLogAt: Infinity, nextSocialAt: Infinity });
+    advanceLife(restored, 0.25, () => 0.99);
+    assert.equal(restored.pendingDecision.id, "choice-dungeon-2");
+    chooseDecision(restored, "dungeon-decline", () => 0.5);
+    assert.equal(restored.dungeonOffers, 2);
+    assert.ok(!availableChoiceEvents(restored).some((event) => event.id === "choice-dungeon"));
+    assert.equal(deserializeLife(serializeLife(restored)).nextDungeonAt, Infinity);
+    assert.equal(isRoutineEventEligible(makeLife({ age: 17 }), CHOICE_EVENTS.find((event) => event.id === "choice-dungeon")), false);
+  }
+});
+
+test("reloading an unanswered dungeon invitation does not consume an opportunity", () => {
+  const { life } = adultLife(99, { age: 22, nextDungeonAt: 22, occupation: "引退" });
+  advanceLife(life, 0.01, () => 0.99);
+  assert.equal(life.pendingDecision.id, "choice-dungeon-1");
+  assert.equal(life.dungeonOffers, 0);
+  const restored = deserializeLife(serializeLife(life));
+  restored.playing = true;
+  advanceLife(restored, 0.01, () => 0.99);
+  assert.equal(restored.pendingDecision.id, "choice-dungeon-1");
+  assert.equal(restored.dungeonOffers, 0);
+  chooseDecision(restored, "dungeon-decline", () => 0.5);
+  assert.equal(restored.dungeonOffers, 1);
+  assert.equal(restored.nextDungeonAt, 48);
+});
+
+test("economy budgets cover youth, spouses, promotions and business rather than only single beginners", () => {
+  const spouse = { id: "spouse", alive: true, occupation: "教師" };
+  for (const [occupation, role] of [["農作業", "農地所有者"], ["商人", "商会主"], ["教師", "学院長"], ["魔術師", "宮廷魔術師"], ["聖職者", "司祭"]]) {
+    for (const owned of [false, true]) {
+      const life = makeLife({
+        age: 50, occupation, occupationRole: role, occupationSkill: 100,
+        ownsHome: owned, homeType: "small", spouseId: spouse.id, npcs: [spouse],
+        businessOccupation: occupation, businessRevenue: 1.2, world: { situation: "平和" },
+      });
+      const budget = monthlyBudget(life);
+      assert.equal(budget.expenses.family, TUNING.adultLivingCostLegacyG);
+      assert.ok(budget.net > 0 && budget.net < 2, `${role}: ${budget.net}`);
+      assert.ok(budget.net * 12 * 40 < TUNING.homePricesLegacyG.small * 8, "even promoted dual-income households do not accumulate dozens of houses");
+      assert.ok(Math.abs(budget.totalIncome - budget.totalExpense - budget.repayment - budget.scholarshipRepayment - budget.net) < 1e-9);
+    }
+  }
+  const youth = makeLife({ age: 13, occupation: "農作業", occupationSkill: 0 });
+  assert.ok(monthlyBudget(youth).net < 0.3, "dependent youth contribute wages to their household");
+  const business = makeLife({ occupation: "魔術師", businessOccupation: "商人", businessRevenue: 100 });
+  assert.equal(monthlyBudget(business).income.work, monthlyBudget({ ...business, businessRevenue: 0 }).income.work, "an inactive business cannot multiply another career's pay");
 });
 
 test("regional names generate 1,000 distinct full names and avoid the famous-name exclusions", () => {
@@ -755,6 +941,7 @@ function adultLife(seed = 1, overrides = {}) {
   life.nextDecisionAt = Infinity;
   life.nextLogAt = Infinity;
   life.nextSocialAt = Infinity;
+  life.nextDungeonAt = Infinity;
   if (life.world) life.world.nextChangeAt = Infinity;
   Object.assign(life, overrides);
   return { life, random };
@@ -1385,7 +1572,10 @@ test("the first career choice is built from abilities and is offered after leavi
   const strong = makeLife({ age: 14, occupation: "家業の手伝い", baseStats: { body: 85, combat: 80, intellect: 50, dexterity: 45, charm: 50, luck: 50 } });
   const strongJobs = firstCareerJobs(strong);
   assert.equal(strongJobs.length, 3);
-  assert.ok(strongJobs.includes("兵士") && strongJobs.includes("冒険者"));
+  assert.ok(strongJobs.includes("兵士"));
+  assert.ok(!strongJobs.includes("冒険者"), "adventuring requires age 15");
+  strong.age = 15;
+  assert.ok(firstCareerJobs(strong).includes("冒険者"));
   const plain = makeLife({ age: 14, occupation: "家業の手伝い", baseStats: { body: 45, combat: 40, intellect: 50, dexterity: 50, charm: 50, luck: 50 } });
   const plainJobs = firstCareerJobs(plain);
   assert.equal(plainJobs.length, 3);

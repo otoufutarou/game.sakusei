@@ -94,6 +94,10 @@ function missingDefaults(life) {
     will: { type: "legal", targetId: null, charity: null },
     peerageTitle: null,
     titleSuccession: null,
+    childhoodContextThrough: life.age ?? 0,
+    dungeonOffers: 0,
+    nextDungeonAt: Math.max(TUNING.dungeonOfferAges[0], (life.age ?? 0) + 1),
+    businessOccupation: ["商人", "農作業"].includes(life.occupation) ? life.occupation : "商人",
   };
 }
 
