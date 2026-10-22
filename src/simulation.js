@@ -2401,9 +2401,12 @@ export const CHOICE_EVENTS = [
     },
     copy: "人間換算で65歳を迎えた。仕事を退くか、続けるか、別の道へ移るかを選べる。",
     choicesFor: (life) => [
-      { label: "今の仕事を退く", effect: "retire-now" },
-      { label: "今の仕事を続ける", effect: "keep-working" },
-      ...careerChoices(life, { effect: "career-change" }),
+      { label: "現在の職を続ける（疲労するが、収入は維持できる）", effect: "keep-working" },
+      { label: "現在の職を退職する", effect: "retire-now" },
+      { label: "隣家の手伝いを行い、僅かな収入を得る（疲労はしない。収入は2G）", effect: "retirement-neighbor-help" },
+      ...(life.occupationSkill >= 60
+        ? [{ label: "弟子をとり、職業について教える", effect: "retirement-take-apprentice" }]
+        : []),
     ],
   },
   {
@@ -2423,7 +2426,7 @@ export const CHOICE_EVENTS = [
           { label: `${[...children].sort((a, b) => b.humanAge - a.humanAge)[0].name}に全額`, effect: "will-oldest-child" },
           { label: "存命の子供全員に均等", effect: "will-equal-children" },
         ] : []),
-        ...(friends.length ? [{ label: "友人に均等に分配", effect: "will-friends-equal" }] : []),
+        ...(friends.length ? [{ label: "友人へ均等に相続する", effect: "will-friends-equal" }] : []),
         ...contacts.map((npc) => ({ label: `${npc.name}に全額を遺す`, effect: `will-person:${npc.id}` })),
         { label: "教会へ寄付", effect: "will-charity:教会" },
         { label: "慈善団体へ寄付", effect: "will-charity:慈善団体" },
@@ -2549,7 +2552,10 @@ export const CHOICE_EVENTS = [
   },
   {
     id: "choice-magic-training", title: "魔法の師との出会い", category: "魔法・種族固有", weight: 0.8,
-    requirements: { minAge: 12, minimumGold: 7, requiresFlag: "awakened-magic", custom: (life) => life.mana >= 1 && !training(life) },
+    requirements: {
+      minAge: 12, minimumGold: 7, requiresFlag: "awakened-magic", requiresNotFlag: "magic-mentor-mastery-complete",
+      custom: (life) => life.mana >= 1 && !training(life),
+    },
     copy: "魔法の師が本格的な訓練を勧めている。時間と授業料を使って学ぶか、独学を続けるか。",
     choices: [{ label: "授業料7Gを払い、師に学ぶ", effect: "train-magic" }, { label: "今は独学で練習する", effect: "self-study-magic" }],
   },
@@ -2881,7 +2887,7 @@ export function applyChoice(life, choice, random = Math.random) {
       break;
     case "will-friends-equal":
       life.will = { type: "friends-equal", targetId: null, charity: null };
-      message = "存命の友人に均等に財産を遺す遺言を残した。";
+      message = "友人へ均等に相続する遺言を残した。";
       break;
     case "will-person": {
       const targetId = selected.effect.split(":")[1];
@@ -2967,6 +2973,18 @@ export function applyChoice(life, choice, random = Math.random) {
       changeOccupation(life, "引退", "65歳の退職選択");
       addFlag(life, "retirement-choice-resolved");
       message = `${life.retiredOccupation}を退き、これからは自分の時間を過ごすことにした。`;
+      break;
+    case "retirement-neighbor-help":
+      life.retiredOccupation = life.occupation;
+      changeOccupation(life, "隣家の手伝い", "65歳の定年後の軽作業");
+      addFlag(life, "retirement-choice-resolved");
+      message = "現在の職を退き、疲労のない隣家の手伝いで月2Gの収入を得ることにした。";
+      break;
+    case "retirement-take-apprentice":
+      life.retiredOccupation = life.occupation;
+      changeOccupation(life, "引退", "65歳の退職後に弟子を取る");
+      addFlag(life, "retirement-choice-resolved");
+      message = `${life.retiredOccupation}の職を退き、弟子を取って職業を教えることにした。`;
       break;
     case "keep-working":
       addFlag(life, "retirement-choice-resolved");
@@ -3373,7 +3391,18 @@ export function applyChoice(life, choice, random = Math.random) {
         learning: quality.learning, years: 5, mentor, status: "魔術修行中",
       });
       addFlag(life, "trained-magic");
-      message = "師のもとで魔法を学び、魔力を安全に扱う技術を身につけた。";
+      if (life.mana <= 50) {
+        message = "魔力を安全に扱うすべを覚えた。";
+      } else if (life.mana <= 70) {
+        message = "魔力を自在に動かせるようになった。";
+      } else if (life.mana <= 100) {
+        message = "あなたほど魔法の才能が豊かな人は珍しいと師に褒められた。";
+      } else if (life.mana < 120) {
+        message = "大魔法を扱えるようになった。魔術師ならば大成するだろう。";
+      } else {
+        addFlag(life, "magic-mentor-mastery-complete");
+        message = "あなたほど魔法に卓越していれば、歴史に残る大魔術師になるだろう。あなたに教えることはもう何も無い。";
+      }
       notes.push(`新しい師匠: ${mentor.name}（${quality.label}）`, "魔術技能が成長対象になった");
       break;
     }
@@ -3802,7 +3831,7 @@ function die(life, cause) {
   life.deathAge = life.age;
   const heirs = settleInheritance(life);
   const detail = life.will?.type === "friends-equal"
-    ? ` 相続財産${gold(life.inheritanceEstate)}を存命の友人に均等に分けた。`
+    ? ` 相続財産${gold(life.inheritanceEstate)}を友人へ均等に相続した。`
     : heirs.length
     ? ` 相続財産${gold(life.inheritanceEstate)}を${heirs.map((heir) => `${heir.name}へ${gold(heir.amount)}`).join("、")}分けた。`
     : ` 借金を清算した後の財産は${life.inheritanceTo}へ帰属した。`;

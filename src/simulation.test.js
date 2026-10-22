@@ -750,6 +750,33 @@ test("choosing a magic mentor creates a persistent contact and ongoing skill pra
   assert.ok(life.skills.magic > 0);
 });
 
+test("magic mentor results reflect mana and stop after reaching the final tier", () => {
+  const event = CHOICE_EVENTS.find((item) => item.id === "choice-magic-training");
+  const results = [
+    [50, "魔力を安全に扱うすべを覚えた。"],
+    [51, "魔力を自在に動かせるようになった。"],
+    [70, "魔力を自在に動かせるようになった。"],
+    [71, "あなたほど魔法の才能が豊かな人は珍しいと師に褒められた。"],
+    [100, "あなたほど魔法の才能が豊かな人は珍しいと師に褒められた。"],
+    [101, "大魔法を扱えるようになった。魔術師ならば大成するだろう。"],
+    [119, "大魔法を扱えるようになった。魔術師ならば大成するだろう。"],
+    [120, "あなたほど魔法に卓越していれば、歴史に残る大魔術師になるだろう。あなたに教えることはもう何も無い。"],
+  ];
+  for (const [mana, expected] of results) {
+    const life = makeLife({
+      age: 20, gold: 30, mana, historyFlags: ["awakened-magic"], npcs: [],
+      skills: { magic: 0 }, skillTalents: { magic: "普通" }, skillPractice: {},
+      pendingDecision: { id: "magic-training", choices: [{ effect: "train-magic" }] },
+    });
+    applyChoice(life, { effect: "train-magic" }, seededRandom(42));
+    assert.equal(life.lastResult.message, expected, `mana ${mana}`);
+    if (mana >= 120) {
+      life.trainingPlan = null;
+      assert.equal(isRoutineEventEligible(life, event), false);
+    }
+  }
+});
+
 test("species lifespan and event density scale with the human-equivalent lifespan", () => {
   const races = [RACES[0], RACES.find((race) => race.id === "demon"), RACES.find((race) => race.id === "elf"), RACES.find((race) => race.id === "dragon")];
   const samples = races.map((race, raceIndex) => {
@@ -1129,6 +1156,7 @@ test("friend inheritance is represented by one equal-share option", () => {
   ];
   const choices = event.choicesFor(life);
   assert.equal(choices.filter((choice) => choice.effect === "will-friends-equal").length, 1);
+  assert.equal(choices.find((choice) => choice.effect === "will-friends-equal").label, "友人へ均等に相続する");
   assert.equal(choices.some((choice) => choice.effect === "will-person:friend-1" || choice.effect === "will-person:friend-2"), false);
   assert.ok(choices.some((choice) => choice.effect === "will-person:acquaintance"), "other named contacts remain selectable");
 });
@@ -1149,7 +1177,7 @@ test("a grouped friend inheritance is shared equally among living friends", () =
   assert.deepEqual(life.inheritance.map((heir) => [heir.id, heir.amount]), [["friend-1", 45], ["friend-2", 45]]);
   assert.ok(!life.journal.at(-1).text.includes("友人一"));
   assert.ok(!life.journal.at(-1).text.includes("友人二"));
-  assert.match(life.journal.at(-1).text, /存命の友人に均等/);
+  assert.match(life.journal.at(-1).text, /友人へ均等に相続/);
 });
 
 test("steady living does not create money and deliberate saving yields only a small reserve", () => {
@@ -1302,7 +1330,7 @@ test("meeting NPCs, romance, and marriage run through persistent NPCs and refusa
 });
 
 test("children are a choice: no automatic births, 'not now' defers, 'never' stops the question", () => {
-  assert.deepEqual(TUNING.annualConceptionChanceByAge.map(({ chance }) => chance), [0.8, 0.8, 0.8, 0.8]);
+  assert.deepEqual(TUNING.annualConceptionChanceByAge.map(({ chance }) => chance), [0.9, 0.9, 0.9, 0.9]);
   const { life, random } = adultLife(8, { age: 28, gold: 80 });
   const partner = { id: "spouse-1", name: "配偶者", race: "human", humanAge: 27, alive: true, affinity: 80, history: [], relationship: "配偶者", occupation: "商人", gender: "女性", maritalStatus: "既婚" };
   life.npcs.push(partner);
@@ -1321,6 +1349,25 @@ test("children are a choice: no automatic births, 'not now' defers, 'never' stop
   assert.equal(life.npcs.filter((npc) => npc.relationship === "子").length, 0);
   decide(life, "children-yes", random);
   assert.equal(life.childPlan, "wants");
+});
+
+test("failed conception attempts continue every year until a child is conceived", () => {
+  const { life } = adultLife(9, { age: 28, gender: "男性" });
+  const partner = { id: "wife", name: "配偶者", race: "human", humanAge: 27, alive: true, gender: "女性", relationship: "配偶者", occupation: "商人", history: [] };
+  life.npcs = [partner];
+  life.spouseId = partner.id;
+  life.childPlan = "wants";
+  life.tryingSince = life.age;
+  life.tryingUntil = life.age + 1;
+  life.tryingMotherAge = partner.humanAge;
+
+  advanceLife(life, 1, () => 0.999);
+  assert.equal(life.childPlan, "wants");
+  assert.ok(life.tryingUntil > life.age);
+  assert.match(life.journal.at(-1).text, /この年は子供を授からなかった/);
+  advanceLife(life, 1, () => 0.999);
+  assert.equal(life.childPlan, "wants");
+  assert.equal(life.journal.filter((entry) => /この年は子供を授からなかった/.test(entry.text)).length, 2);
 });
 
 test("social encounters happen about half as often, while all races retain the same human-equivalent log cadence", () => {
@@ -1441,11 +1488,25 @@ test("retirement is offered once at human-equivalent age 65 and does not force r
   decide(life, "keep-working", random);
   assert.equal(life.occupation, "商人");
   assert.equal(isRoutineEventEligible(life, event), false, "the offer cannot repeat");
+  assert.deepEqual(event.choicesFor(life).map((choice) => choice.effect), [
+    "keep-working", "retire-now", "retirement-neighbor-help",
+  ]);
 
   const second = adultLife(23, { age: 65, occupation: "教師" }).life;
   decide(second, "retire-now", seededRandom(1));
   assert.equal(second.occupation, "引退");
   assert.equal(second.retiredOccupation, "教師");
+
+  const lightWork = adultLife(24, { age: 65, occupation: "農作業" }).life;
+  decide(lightWork, "retirement-neighbor-help", seededRandom(1));
+  assert.equal(lightWork.occupation, "隣家の手伝い");
+  assert.equal(monthlyBudget(lightWork).income.work, 2);
+
+  const skilled = adultLife(25, { age: 65, occupation: "農作業", occupationSkill: 60 }).life;
+  assert.ok(event.choicesFor(skilled).some((choice) => choice.effect === "retirement-take-apprentice"));
+  decide(skilled, "retirement-take-apprentice", seededRandom(1));
+  assert.equal(skilled.occupation, "引退");
+  assert.equal(skilled.retiredOccupation, "農作業");
 });
 
 test("promotion eligibility offers a visible selection instead of changing the role automatically", () => {
