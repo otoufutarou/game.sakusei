@@ -1214,6 +1214,22 @@ test("will scheduling does not replay missed ages or let legacy entries block ag
   assert.equal(availableChoiceEvents(life).some((event) => event.id === "choice-will"), false);
 });
 
+test("reloading an unanswered will does not lose the age-70 or final age-85 choice", () => {
+  for (const age of [70, 85]) {
+    const original = adultLife(44, { age, occupation: "引退", occupationRole: "引退" }).life;
+    advanceLife(original, 0.01, () => 0.99);
+    assert.equal(original.pendingDecision?.id, "choice-will");
+    const restored = deserializeLife(serializeLife(original));
+    restored.playing = true;
+    advanceLife(restored, 0.01, () => 0.99);
+    assert.equal(restored.pendingDecision?.id, "choice-will");
+    chooseDecision(restored, "will-charity:協会", () => 0.99);
+    assert.equal(restored.will.charity, "協会");
+    const answered = deserializeLife(serializeLife(restored));
+    assert.equal(availableChoiceEvents(answered).some((event) => event.id === "choice-will"), false);
+  }
+});
+
 test("loading any save removes automatic household logs but keeps other events and balances", () => {
   for (const saveVersion of [1, SAVE_VERSION]) {
     const life = migrateLife({

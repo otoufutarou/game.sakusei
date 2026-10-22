@@ -2573,7 +2573,7 @@ export const CHOICE_EVENTS = [
 
 function nextWillOfferAge(life) {
   return TUNING.willOfferAges.find((age) => life.age < age + 1
-    && !(life.eventHistory ?? []).some((entry) => entry.id === "choice-will" && Math.floor(entry.age) === age)) ?? Infinity;
+    && !(life.eventHistory ?? []).some((entry) => entry.id === "choice-will-result" && Math.floor(entry.age) === age)) ?? Infinity;
 }
 
 export function availableChoiceEvents(life) {
