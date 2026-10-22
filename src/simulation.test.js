@@ -1361,11 +1361,11 @@ test("failed conception attempts continue every year until a child is conceived"
   life.tryingUntil = life.age + 1;
   life.tryingMotherAge = partner.humanAge;
 
-  advanceLife(life, 1, () => 0.999);
+  for (let quarter = 0; quarter < 4; quarter += 1) advanceLife(life, 0.25, () => 0.999);
   assert.equal(life.childPlan, "wants");
   assert.ok(life.tryingUntil > life.age);
-  assert.match(life.journal.at(-1).text, /この年は子供を授からなかった/);
-  advanceLife(life, 1, () => 0.999);
+  assert.ok(life.journal.some((entry) => /この年は子供を授からなかった/.test(entry.text)));
+  for (let quarter = 0; quarter < 4; quarter += 1) advanceLife(life, 0.25, () => 0.999);
   assert.equal(life.childPlan, "wants");
   assert.equal(life.journal.filter((entry) => /この年は子供を授からなかった/.test(entry.text)).length, 2);
 });

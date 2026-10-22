@@ -3383,6 +3383,7 @@ export function applyChoice(life, choice, random = Math.random) {
       message = `${life.illness?.name ?? "病気"}の治療を受けず、経過を見守ることにした。`;
       break;
     case "train-magic": {
+      const manaAtTraining = life.mana;
       addSkillPoints(life, "magic", 1, "師匠との初回訓練");
       const mentor = registerNPC(life, random, "魔術の師匠", "魔術師");
       const quality = mentorQuality(random);
@@ -3391,13 +3392,13 @@ export function applyChoice(life, choice, random = Math.random) {
         learning: quality.learning, years: 5, mentor, status: "魔術修行中",
       });
       addFlag(life, "trained-magic");
-      if (life.mana <= 50) {
+      if (manaAtTraining <= 50) {
         message = "魔力を安全に扱うすべを覚えた。";
-      } else if (life.mana <= 70) {
+      } else if (manaAtTraining <= 70) {
         message = "魔力を自在に動かせるようになった。";
-      } else if (life.mana <= 100) {
+      } else if (manaAtTraining <= 100) {
         message = "あなたほど魔法の才能が豊かな人は珍しいと師に褒められた。";
-      } else if (life.mana < 120) {
+      } else if (manaAtTraining < 120) {
         message = "大魔法を扱えるようになった。魔術師ならば大成するだろう。";
       } else {
         addFlag(life, "magic-mentor-mastery-complete");
