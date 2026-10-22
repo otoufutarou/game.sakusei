@@ -163,6 +163,8 @@ export function migrateLife(data) {
     life.journal = migrateLegacyJournal(life.journal);
     life.lastResult = migrateLegacyResult(life.lastResult);
   }
+  life.journal = life.journal.filter((entry) => entry?.label !== "家計"
+    && entry?.id !== "finance-shortfall" && !entry?.id?.startsWith("finance-expense-"));
   if (life.ownsHome) {
     life.homeType ??= "small";
     if (!life.homeValue || (migrateSilverText && life.homeType === "small" && life.homeValue < TUNING.homePricesLegacyG.small)) {

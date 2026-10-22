@@ -49,14 +49,14 @@ const COAT_COLORS = ["#647d72", "#786984", "#9a6456", "#667995", "#947b4d"];
 export const TUNING = Object.freeze({
   homePricesLegacyG: { small: 120, large: 400, estate: 50000 / 30 },
   homeResaleRange: [0.7, 0.9],
-  homeRentLegacyG: 0.7,
-  adultLivingCostLegacyG: 1.9,
+  homeRentLegacyG: 0.4,
+  adultLivingCostLegacyG: 1.2,
   youthLivingCostLegacyG: 0.8,
   lifestyleCostLegacyG: 0.12,
   lifestyleCostRoleGrowth: 0.6,
-  discretionarySpendingRate: 0.7,
+  discretionarySpendingRate: 0.35,
   highIncomeSpendingThreshold: 1,
-  highIncomeSpendingRate: 0.15,
+  highIncomeSpendingRate: 0.05,
   youthHouseholdContributionRate: 0.9,
   decisionCooldownYears: 8,
   dungeonOfferAges: [22, 48],
@@ -86,6 +86,9 @@ export const TUNING = Object.freeze({
   firstDecisionLatestAge: 10.5,
   socialMeanYears: 5.2,
   retirementHumanAge: 65,
+  willOfferAges: [70, 85],
+  monthlyMedicalCostLegacyG: 0.25,
+  ordinaryDebtMonthlyInterestRate: 0.002,
   promotionSuccessChance: 0.25,
   promotionRetryYears: 3,
   ordinaryDebtLimit: 100,
@@ -1134,8 +1137,8 @@ export function monthlyBudget(life, random = null) {
   const rent = adult && !owned ? TUNING.homeRentLegacyG * mods.price : 0;
   const children = livingChildren(life).filter((npc) => !npc.independent);
   const familyCost = ((spouse ? TUNING.adultLivingCostLegacyG : 0) + children.reduce((sum, npc) => sum + ((npc.humanAge ?? 0) < 15 ? 0.5 : 0.3), 0)) * mods.price;
-  const medical = life.health !== "健やか" && life.age >= 15 ? 0.5 * mods.price : 0;
-  const interest = life.debt * 0.008;
+  const medical = life.health !== "健やか" && life.age >= 15 ? TUNING.monthlyMedicalCostLegacyG * mods.price : 0;
+  const interest = life.debt * TUNING.ordinaryDebtMonthlyInterestRate;
   const baseLifestyle = adult
     ? TUNING.lifestyleCostLegacyG * (1 + TUNING.lifestyleCostRoleGrowth * (roleMultiplier(life) - 1)) * mods.price
     : 0;
@@ -1214,7 +1217,7 @@ function careerPreview(life, career, firstCareer = false) {
   };
   const salary = monthlyBudget(salaryLife).income.work;
   const situation = life.world?.situation ?? life.situation;
-  const situationLabel = situation && !["平和", "平穏"].includes(situation) ? `（${situation}）` : "";
+  const situationLabel = situation && !["平和", "平穏"].includes(situation) ? `（${situation}時）` : "";
   const skill = Math.round(life.skills?.[career.skill] ?? 0);
   return [
     `月給${situationLabel}: 約${salary.toFixed(1)}G`,
@@ -1324,7 +1327,6 @@ function careerChoices(life, { occupations, effect = "career-start", excludeCurr
 function processMonth(life, random) {
   const budget = monthlyBudget(life, random);
   life.finance ??= { recent: [], lastMonth: null, monthProgress: 0, totalIncome: 0, totalExpense: 0 };
-  const previousGold = life.gold;
   let borrowedThisMonth = 0;
   life.gold += budget.totalIncome - budget.totalExpense;
   if (budget.repayment > 0) {
@@ -1351,46 +1353,6 @@ function processMonth(life, random) {
   life.finance.totalIncome += budget.totalIncome;
   life.finance.totalExpense += budget.totalExpense + budget.repayment + budget.scholarshipRepayment;
   life.finance.lastMonth = { age: life.age, ...budget };
-  const expenseLogDue = life.finance.lastExpenseLogAt == null || life.age - life.finance.lastExpenseLogAt >= 1;
-  if (budget.net < -0.1 && (previousGold > life.gold || borrowedThisMonth > 0 || life.financialHardship)
-    && life.age >= 15 && expenseLogDue) {
-    const expenses = [
-      ["生活費", budget.expenses.living],
-      ["家賃", budget.expenses.rent],
-      ["家族の生活費", budget.expenses.family],
-      ["医療費", budget.expenses.medical],
-      ["借金の利息・返済", budget.expenses.interest + budget.repayment],
-      ["交際費・その他", budget.expenses.lifestyle],
-      ["住居・ペットの維持費", budget.expenses.upkeep],
-    ].filter(([, amount]) => amount > 0.05).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const factors = {
-      "不況": "不況で収入が減った",
-      "飢饉": "飢饉で食料や生活費が上がった",
-      "魔王君臨": "魔王の影響で不況と不作が続いている",
-      "疫病流行": "疫病で物価が上がっている",
-      "戦争中": "戦争で物価が上がっている",
-    };
-    const causes = expenses.map(([label]) => label);
-    if (factors[life.world?.situation]) causes.push(factors[life.world.situation]);
-    const cashLoss = Math.min(previousGold, -budget.net);
-    if (cashLoss > 0) recordGold(life, causes.join("・") || "家計の支出", -cashLoss);
-    appendEvent(
-      life,
-      `人間換算${Math.floor(life.age)}年目は収入より支出が${gold(-budget.net)}多く、所持金が減った。主な要因: ${causes.join("、") || "毎月の家計"}。${borrowedThisMonth > 0 ? `${gold(borrowedThisMonth)}を借り入れた。` : life.debt >= TUNING.ordinaryDebtLimit ? "借入上限に達しており、これ以上は借りられない。" : ""}`,
-      "life", "家計", `finance-expense-${Math.floor(life.age)}`,
-    );
-    life.finance.lastExpenseLogAt = life.age;
-  }
-  if (life.gold === 0 && life.financialHardship && life.age >= 15
-    && !hasRecentEvent(life, "finance-shortfall", 3)) {
-    appendEvent(
-      life,
-      life.debt >= TUNING.ordinaryDebtLimit
-        ? `生活費が足りず、所持金と借入枠を使い切った（借金${gold(life.debt)}）。`
-        : `生活費が足りず、所持金を使い切った。借入枠が残っている場合は家計の不足分を借り入れる。`,
-      "life", "家計", "finance-shortfall",
-    );
-  }
 }
 
 // ---------------------------------------------------------------- NPCs and family
@@ -1961,6 +1923,8 @@ const CHILDHOOD_CHOICE_REWARDS = Object.freeze({
 const steadyPreview = (detail, cost = "費用: なし") => [cost, detail];
 
 const CHOICE_RULES = {
+  "will-spouse": { check: (life) => spouseNpc(life) ? null : "存命の配偶者がいない" },
+  "will-friends-equal": { check: (life) => (life.npcs ?? []).some((npc) => npc.alive && npc.relationship === "友人") ? null : "存命の友人がいない" },
   "child-school-town": { cost: 6, preview: () => ["費用: 6G", "メリット: 基礎をしっかり学べる、親子の絆が深まる"] },
   "child-school-academy": { cost: 50, preview: () => ["費用: 50G", "メリット: 将来の仕事の選択肢が広がる、親子の絆が深まる", "デメリット: 家計への負担が大きい"] },
   "child-school-work": { preview: () => ["費用: なし", "メリット: 家計の助けになる", "デメリット: 子は少し不満に思うかもしれない"] },
@@ -2410,27 +2374,19 @@ export const CHOICE_EVENTS = [
     ],
   },
   {
-    id: "choice-will", title: "遺言を残す", category: "財産・家族", weight: 0.65,
-    requirements: { minAge: 60, cooldownYears: 8 },
+    id: "choice-will", title: "遺言を残す", category: "財産・家族", weight: 1, priority: true,
+    requirements: { minAge: 70, custom: (life) => nextWillOfferAge(life) <= life.age },
     copy: "財産の行き先を決める遺言を無料で作成・変更できる。爵位や領地の継承先は変更できない。",
     choicesFor: (life) => {
       const spouse = spouseNpc(life);
       const children = livingChildren(life);
-      const contacts = (life.npcs ?? []).filter((npc) => npc.alive && npc.id !== spouse?.id
-        && npc.relationship !== "友人" && !children.some((child) => child.id === npc.id));
       const friends = (life.npcs ?? []).filter((npc) => npc.alive && npc.relationship === "友人");
       return [
-        { label: "通常の相続にする", effect: "will-legal" },
-        ...(spouse ? [{ label: `${spouse.name}に全額`, effect: "will-spouse" }] : []),
-        ...(children.length ? [
-          { label: `${[...children].sort((a, b) => b.humanAge - a.humanAge)[0].name}に全額`, effect: "will-oldest-child" },
-          { label: "存命の子供全員に均等", effect: "will-equal-children" },
-        ] : []),
-        ...(friends.length ? [{ label: "友人へ均等に相続する", effect: "will-friends-equal" }] : []),
-        ...contacts.map((npc) => ({ label: `${npc.name}に全額を遺す`, effect: `will-person:${npc.id}` })),
-        { label: "教会へ寄付", effect: "will-charity:教会" },
-        { label: "慈善団体へ寄付", effect: "will-charity:慈善団体" },
-        { label: "国へ寄付", effect: "will-charity:国家" },
+        { label: "法律に沿って家族に相続をする", effect: "will-legal" },
+        { label: "友人に全額を遺す", effect: "will-friends-equal", disabledReason: friends.length ? null : "存命の友人がいない" },
+        { label: `${(spouse?.gender ?? (life.gender === "男性" ? "女性" : "男性")) === "女性" ? "妻" : "夫"}に全額を遺す`, effect: "will-spouse", disabledReason: spouse ? null : "存命の配偶者がいない" },
+        ...(children.length ? [{ label: "子供に全額を遺す", effect: "will-equal-children" }] : []),
+        { label: "協会に寄付をする", effect: "will-charity:協会" },
       ];
     },
   },
@@ -2615,8 +2571,13 @@ export const CHOICE_EVENTS = [
   },
 ];
 
+function nextWillOfferAge(life) {
+  return TUNING.willOfferAges.find((age) => life.age < age + 1
+    && !(life.eventHistory ?? []).some((entry) => entry.id === "choice-will-result" && Math.floor(entry.age) === age)) ?? Infinity;
+}
+
 export function availableChoiceEvents(life) {
-  return CHOICE_EVENTS.filter((event) => isRoutineEventEligible(life, event)
+  return CHOICE_EVENTS.filter((event) => event.id === "choice-will" ? nextWillOfferAge(life) <= life.age : isRoutineEventEligible(life, event)
     && (event.priority || !(life.eventHistory ?? []).some((entry) => entry.id === event.id
       && life.age - entry.age < (event.requirements.cooldownYears ?? TUNING.decisionCooldownYears))));
 }
@@ -2683,6 +2644,8 @@ function buildDecision(life, event, random) {
 
 function decisionFor(life, random) {
   const eligible = availableChoiceEvents(life);
+  const willChoice = eligible.find((event) => event.id === "choice-will");
+  if (willChoice) return buildDecision(life, willChoice, random);
   const firstChildChoice = eligible.find((event) => event.id === "choice-children" && life.childDecisionOffered !== true);
   if (firstChildChoice) return buildDecision(life, firstChildChoice, random);
   const demonKingChoice = eligible.find((event) => ["choice-demon-king", "choice-demon-relief"].includes(event.id));
@@ -4138,6 +4101,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
       life.nextLogAt, life.nextDecisionAt, life.nextSocialAt ?? Infinity, life.maxHumanAge,
       life.trainingEndsAt ?? Infinity, life.world?.nextChangeAt ?? Infinity,
       nextInfancyEvent(life)?.age ?? Infinity, life.demonKingRiseAt ?? Infinity,
+      Math.max(life.age, nextWillOfferAge(life)),
     );
     const elapsed = Math.max(0, Math.min(remaining, nextScheduled - life.age));
     if (Number.isNaN(elapsed)) break;
@@ -4167,6 +4131,7 @@ export function advanceLife(life, humanYears, random = Math.random) {
     if (life.trainingEndsAt != null && life.age >= life.trainingEndsAt) finishTraining(life, random);
     updateCareerCrossroads(life);
     updateCareerReview(life, random);
+    if (nextWillOfferAge(life) <= life.age) life.nextDecisionAt = Math.min(life.nextDecisionAt, life.age);
     const infancy = nextInfancyEvent(life);
     if (infancy && life.age >= infancy.age) {
       appendEvent(life, infancy.text(life), "life", "幼少期", `infancy-${infancy.age}`);

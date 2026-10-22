@@ -384,8 +384,8 @@ test("economy budgets cover youth, spouses, promotions and business rather than 
       });
       const budget = monthlyBudget(life);
       assert.equal(budget.expenses.family, TUNING.adultLivingCostLegacyG);
-      assert.ok(budget.net > 0 && budget.net < 2, `${role}: ${budget.net}`);
-      assert.ok(budget.net * 12 * 40 < TUNING.homePricesLegacyG.small * 8, "even promoted dual-income households do not accumulate dozens of houses");
+      assert.ok(budget.net > 0 && budget.net < budget.totalIncome * 0.65, `${role}: ${budget.net}`);
+      assert.ok(budget.totalExpense > budget.totalIncome * 0.35, "higher earners still pay household and lifestyle costs");
       assert.ok(Math.abs(budget.totalIncome - budget.totalExpense - budget.repayment - budget.scholarshipRepayment - budget.net) < 1e-9);
     }
   }
@@ -1146,7 +1146,7 @@ test("primary education uses parental funds and keeps its preview to two lines",
   assert.ok(routeChoices.some((choice) => choice.effect === "path-academy"));
 });
 
-test("friend inheritance is represented by one equal-share option", () => {
+test("will choices contain only the requested groups, with children conditional", () => {
   const event = CHOICE_EVENTS.find((item) => item.id === "choice-will");
   const { life } = adultLife(44, { age: 60 });
   life.npcs = [
@@ -1156,9 +1156,95 @@ test("friend inheritance is represented by one equal-share option", () => {
   ];
   const choices = event.choicesFor(life);
   assert.equal(choices.filter((choice) => choice.effect === "will-friends-equal").length, 1);
-  assert.equal(choices.find((choice) => choice.effect === "will-friends-equal").label, "友人へ均等に相続する");
-  assert.equal(choices.some((choice) => choice.effect === "will-person:friend-1" || choice.effect === "will-person:friend-2"), false);
-  assert.ok(choices.some((choice) => choice.effect === "will-person:acquaintance"), "other named contacts remain selectable");
+  assert.deepEqual(choices.map((choice) => choice.label), [
+    "法律に沿って家族に相続をする", "友人に全額を遺す",
+    life.gender === "男性" ? "妻に全額を遺す" : "夫に全額を遺す", "協会に寄付をする",
+  ]);
+  assert.ok(choices.find((choice) => choice.effect === "will-spouse").disabledReason);
+  assert.equal(chooseDecision({ ...life, pendingDecision: { choices } }, "will-spouse"), null);
+  const spouse = { id: "spouse", name: "配偶者の名前", gender: "女性", alive: true };
+  life.spouseId = spouse.id;
+  life.npcs.push(spouse);
+  life.children = [{ id: "child-1", name: "子の名前", alive: true }];
+  const withChildren = event.choicesFor(life);
+  assert.equal(withChildren.length, 5);
+  assert.equal(withChildren[2].label, "妻に全額を遺す");
+  assert.equal(withChildren[2].disabledReason, null);
+  assert.equal(withChildren[3].label, "子供に全額を遺す");
+  assert.equal(withChildren[3].effect, "will-equal-children");
+  assert.equal(withChildren.some((choice) => /will-person:|will-oldest-child/.test(choice.effect)), false);
+  life.npcs = [spouse];
+  assert.ok(decorateChoice(life, event.choicesFor(life)[1]).disabledReason);
+});
+
+test("wills are scheduled once each at human-equivalent ages 70 and 85 across races and reloads", () => {
+  for (const race of RACES) {
+    let life = adultLife(44, {
+      race, age: 69.9, occupation: "引退", occupationRole: "引退",
+      world: { situation: "平和", nextChangeAt: Infinity },
+    }).life;
+    for (const age of [70, 85]) {
+      life.age = age - 0.1;
+      life.nextDecisionAt = Infinity;
+      life.nextLogAt = Infinity;
+      life.playing = true;
+      advanceLife(life, 0.25, () => 0.99);
+      assert.equal(life.age, age);
+      assert.equal(life.pendingDecision?.id, "choice-will", race.id);
+      chooseDecision(life, "will-legal", () => 0.5);
+      life = deserializeLife(serializeLife(life));
+      assert.equal(availableChoiceEvents(life).some((event) => event.id === "choice-will"), false);
+    }
+    assert.deepEqual(life.eventHistory.filter((entry) => entry.id === "choice-will").map((entry) => entry.age), [70, 85]);
+    for (const age of [60, 69, 71, 78, 84, 86, 100]) {
+      life.age = age;
+      assert.equal(availableChoiceEvents(life).some((event) => event.id === "choice-will"), false);
+    }
+  }
+});
+
+test("will scheduling does not replay missed ages or let legacy entries block age 85", () => {
+  const life = adultLife(44, { age: 80, occupation: "引退" }).life;
+  life.eventHistory.push({ id: "choice-will", age: 60 });
+  life.journal.push({ id: "choice-will", text: "昔の遺言" });
+  assert.equal(availableChoiceEvents(life).some((event) => event.id === "choice-will"), false);
+  life.age = 85;
+  assert.ok(availableChoiceEvents(life).some((event) => event.id === "choice-will"));
+  life.age = 86;
+  assert.equal(availableChoiceEvents(life).some((event) => event.id === "choice-will"), false);
+});
+
+test("reloading an unanswered will does not lose the age-70 or final age-85 choice", () => {
+  for (const age of [70, 85]) {
+    const original = adultLife(44, { age, occupation: "引退", occupationRole: "引退" }).life;
+    advanceLife(original, 0.01, () => 0.99);
+    assert.equal(original.pendingDecision?.id, "choice-will");
+    const restored = deserializeLife(serializeLife(original));
+    restored.playing = true;
+    advanceLife(restored, 0.01, () => 0.99);
+    assert.equal(restored.pendingDecision?.id, "choice-will");
+    chooseDecision(restored, "will-charity:協会", () => 0.99);
+    assert.equal(restored.will.charity, "協会");
+    const answered = deserializeLife(serializeLife(restored));
+    assert.equal(availableChoiceEvents(answered).some((event) => event.id === "choice-will"), false);
+  }
+});
+
+test("loading any save removes automatic household logs but keeps other events and balances", () => {
+  for (const saveVersion of [1, SAVE_VERSION]) {
+    const life = migrateLife({
+      saveVersion, race: "human", nation: "kingdom", age: 80, gold: 123, debt: 45,
+      journal: [
+        { id: "finance-expense-32", text: "収入より支出が多い" },
+        { id: "finance-shortfall", text: "借入枠を使い切った" },
+        { label: "家計", text: "家計の通知" },
+        { id: "wedding", text: "結婚した" },
+      ],
+    });
+    assert.deepEqual(life.journal, [{ id: "wedding", text: "結婚した" }]);
+    assert.equal(life.gold, 123);
+    assert.equal(life.debt, 45);
+  }
 });
 
 test("a grouped friend inheritance is shared equally among living friends", () => {
@@ -1188,14 +1274,67 @@ test("steady living does not create money and deliberate saving yields only a sm
   assert.equal(life.gold, 21);
 });
 
-test("ordinary wage cash flow leaves only a modest monthly surplus", () => {
+test("ordinary wages build a retirement reserve instead of merely breaking even", () => {
   const farmer = adultLife(46, { occupation: "農作業", occupationRole: "農作業", occupationSkill: 0, occupationYears: 0 }).life;
   farmer.world = { situation: "平和" };
   const budget = monthlyBudget(farmer);
   assert.equal(budget.income.work, 3.5 * TUNING.wageMultiplier);
   assert.equal(budget.expenses.living, TUNING.adultLivingCostLegacyG);
   assert.equal(budget.expenses.rent, TUNING.homeRentLegacyG);
-  assert.ok(budget.net > 0 && budget.net < 0.75, "an ordinary farmer's monthly cash flow stays near break-even");
+  assert.ok(budget.net >= 0.6 && budget.net < 1, "ordinary wages retain a meaningful but limited monthly surplus");
+  const retirement = monthlyBudget({ ...farmer, age: 65, occupation: "引退", occupationRole: "引退" });
+  const workingYears = 65 - 20;
+  const savings = budget.net * 12 * workingYears;
+  assert.ok(savings + retirement.net * 12 * 5 > savings * 0.75, "five retired years do not consume lifetime savings");
+  assert.ok(savings + retirement.net * 12 * 25 > 0, "ordinary savings can support retirement to human age 90");
+  const indebted = monthlyBudget({ ...farmer, debt: TUNING.ordinaryDebtLimit });
+  assert.ok(indebted.repayment > 0 && indebted.net >= 0, "ordinary workers can pay down capped debt");
+});
+
+test("career salary previews label adverse conditions as occurring during that situation", () => {
+  const life = adultLife(46, {
+    age: 30, nextCareerReviewAt: 0,
+    world: { situation: "魔王君臨" },
+  }).life;
+  const event = CHOICE_EVENTS.find((item) => item.id === "choice-work-offer");
+  const choices = event.choicesFor(life).filter((choice) => choice.effect.startsWith("career-change:"));
+  assert.ok(choices.length > 0);
+  assert.ok(choices.every((choice) => choice.preview.some((line) => line.startsWith("月給（魔王君臨時）"))));
+});
+
+test("a working lifetime funds old age through monthly accounting for every race", () => {
+  for (const race of RACES) {
+    const life = adultLife(46, {
+      race, gold: 0, age: 20, maxHumanAge: 120,
+      occupation: "農作業", occupationRole: "農作業", occupationSkill: 0,
+      nextCareerReviewAt: Infinity,
+      npcs: [], children: [], spouseId: null,
+      world: { situation: "平和", nextChangeAt: Infinity },
+    }).life;
+    const advanceTo = (age) => {
+      let steps = 0;
+      while (life.age < age && life.active && steps++ < 1000) {
+        life.nextDecisionAt = Infinity;
+        life.nextLogAt = Infinity;
+        if (life.pendingDecision) {
+          assert.equal(life.pendingDecision.id, "choice-will");
+          chooseDecision(life, "will-legal", () => 0.99);
+          life.nextDecisionAt = Infinity;
+          life.nextLogAt = Infinity;
+        }
+        advanceLife(life, Math.min(0.25, age - life.age), () => 0.99);
+      }
+      assert.equal(life.age, age);
+    };
+    advanceTo(65);
+    const savings = life.gold;
+    decide(life, "retire-now", () => 0.99);
+    advanceTo(70);
+    assert.ok(life.gold > savings * 0.75, `${race.id}: savings survive the first five retired years`);
+    advanceTo(100);
+    assert.ok(life.gold > 0, `${race.id}: a long retirement retains savings`);
+    assert.equal(life.debt, 0);
+  }
 });
 
 test("spending reduces gold, is recorded in the ledger, and unaffordable choices cannot be applied", () => {
@@ -1256,7 +1395,7 @@ test("choice summaries retain important conditions and durations", () => {
   assert.ok(preview[1].includes("期間: 約5年"));
 });
 
-test("ordinary lifetime savings stay near one small home for most careers", () => {
+test("ordinary lifetime savings build a reserve without unbounded wealth", () => {
   const jobs = ["農作業", "商人", "職人見習い", "兵士", "教師", "冒険者", "服飾店の見習い"];
   const peakAssets = [];
   for (let seed = 1; seed <= 210; seed += 1) {
@@ -1299,10 +1438,10 @@ test("ordinary lifetime savings stay near one small home for most careers", () =
   const seventiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.7)];
   const ninetiethPercentile = peakAssets[Math.floor(peakAssets.length * 0.9)];
   console.log(`peak assets p50/p70/p90: ${peakAssets[Math.floor(peakAssets.length / 2)]}/${seventiethPercentile}/${ninetiethPercentile}`);
-  assert.ok(seventiethPercentile >= homePrice * 0.08 && seventiethPercentile <= homePrice * 2.5,
-    `70th percentile assets ${seventiethPercentile}G should stay well below a small home for ordinary careers (${homePrice}G)`);
+  assert.ok(seventiethPercentile >= homePrice && seventiethPercentile <= homePrice * 5,
+    `70th percentile assets ${seventiethPercentile}G should include a retirement reserve without runaway wealth`);
   assert.ok(peakAssets.filter((assets) => assets < homePrice * 0.75).length > 0, "some workers remain below the home threshold");
-  assert.ok(ninetiethPercentile < homePrice * 3.5, "ordinary careers should not commonly accumulate several home prices");
+  assert.ok(ninetiethPercentile < homePrice * 7, "ordinary careers retain an upper bound on typical lifetime savings");
 });
 
 test("meeting NPCs, romance, and marriage run through persistent NPCs and refusals are possible", () => {
@@ -1527,7 +1666,7 @@ test("promotion eligibility offers a visible selection instead of changing the r
   assert.match(life.lastResult.message, /月収は約.+から.+になった/);
 });
 
-test("monthly shortfalls borrow up to the ordinary debt cap and log why money is short", () => {
+test("monthly shortfalls still respect the debt cap without household journal spam", () => {
   const { life } = adultLife(24, { age: 30, occupation: "失業中", gold: 0, debt: 0 });
   life.nextDecisionAt = 100;
   life.nextLogAt = 100;
@@ -1538,11 +1677,11 @@ test("monthly shortfalls borrow up to the ordinary debt cap and log why money is
   assert.ok(life.debt > 0 && life.debt <= TUNING.ordinaryDebtLimit);
   assert.equal(life.financialHardship, true);
   assert.ok(life.finance.recent.some((item) => item.label === "生活費の借入"));
-  assert.ok(life.journal.some((event) => event.label === "家計" && /家賃|生活費/.test(event.text)));
+  assert.equal(life.journal.some((event) => event.label === "家計" || event.id?.startsWith("finance-")), false);
 
   for (let year = 0; year < 80; year += 1) advanceLife(life, 0.25, () => 0.99);
   assert.equal(life.debt, TUNING.ordinaryDebtLimit);
-  assert.ok(life.journal.some((event) => /借入上限/.test(event.text)));
+  assert.equal(life.journal.some((event) => /借入上限/.test(event.text)), false);
 });
 
 test("illness settings use the revised treatment rates and treatment failure is not immediate death", () => {
