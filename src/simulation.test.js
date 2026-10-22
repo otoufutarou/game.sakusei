@@ -1286,6 +1286,41 @@ test("career salary previews label adverse conditions as occurring during that s
   assert.ok(choices.every((choice) => choice.preview.some((line) => line.startsWith("月給（魔王君臨時）"))));
 });
 
+test("a working lifetime funds old age through monthly accounting for every race", () => {
+  for (const race of RACES) {
+    const life = adultLife(46, {
+      race, gold: 0, age: 20, maxHumanAge: 120,
+      occupation: "農作業", occupationRole: "農作業", occupationSkill: 0,
+      nextCareerReviewAt: Infinity,
+      npcs: [], children: [], spouseId: null,
+      world: { situation: "平和", nextChangeAt: Infinity },
+    }).life;
+    const advanceTo = (age) => {
+      let steps = 0;
+      while (life.age < age && life.active && steps++ < 1000) {
+        life.nextDecisionAt = Infinity;
+        life.nextLogAt = Infinity;
+        if (life.pendingDecision) {
+          assert.equal(life.pendingDecision.id, "choice-will");
+          chooseDecision(life, "will-legal", () => 0.99);
+          life.nextDecisionAt = Infinity;
+          life.nextLogAt = Infinity;
+        }
+        advanceLife(life, Math.min(0.25, age - life.age), () => 0.99);
+      }
+      assert.equal(life.age, age);
+    };
+    advanceTo(65);
+    const savings = life.gold;
+    decide(life, "retire-now", () => 0.99);
+    advanceTo(70);
+    assert.ok(life.gold > savings * 0.75, `${race.id}: savings survive the first five retired years`);
+    advanceTo(100);
+    assert.ok(life.gold > 0, `${race.id}: a long retirement retains savings`);
+    assert.equal(life.debt, 0);
+  }
+});
+
 test("spending reduces gold, is recorded in the ledger, and unaffordable choices cannot be applied", () => {
   const { life, random } = adultLife(5, { gold: 100 });
   decide(life, "buy-gear", random);
@@ -1344,7 +1379,7 @@ test("choice summaries retain important conditions and durations", () => {
   assert.ok(preview[1].includes("期間: 約5年"));
 });
 
-test("ordinary lifetime savings build a reserve without making workers unlimitedly rich", () => {
+test("ordinary lifetime savings build a reserve without unbounded wealth", () => {
   const jobs = ["農作業", "商人", "職人見習い", "兵士", "教師", "冒険者", "服飾店の見習い"];
   const peakAssets = [];
   for (let seed = 1; seed <= 210; seed += 1) {
