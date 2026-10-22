@@ -92,10 +92,10 @@ export const TUNING = Object.freeze({
   childDecisionMaxHumanAge: 45,
   childRetryYears: [2, 3],
   annualConceptionChanceByAge: [
-    { until: 29, chance: 0.8 },
-    { until: 34, chance: 0.8 },
-    { until: 39, chance: 0.8 },
-    { until: 45, chance: 0.8 },
+    { until: 29, chance: 0.9 },
+    { until: 34, chance: 0.9 },
+    { until: 39, chance: 0.9 },
+    { until: 45, chance: 0.9 },
   ],
   childRaceInheritance: "mother",
   treatmentSuccess: {
@@ -891,6 +891,7 @@ const OCCUPATION_INCOME = Object.freeze({
   "工房主": 4.6,
   "失業中": 0.4,
   "引退": 0.8,
+  "隣家の手伝い": 2.5,
   "狩りを覚える": 1.5,
   "巣の外を探検する": 1.5,
   "縄張りを見回る": 1.5,
@@ -941,7 +942,7 @@ const ROLE_LADDERS = Object.freeze({
 });
 
 const TRAINEE_OCCUPATIONS = ["魔術師の弟子", "魔術学院生", "剣術の弟子", "騎士学院生", "学術院生"];
-const NON_WORKING = ["まだ幼い子ども", "引退", "失業中"];
+const NON_WORKING = ["まだ幼い子ども", "引退", "失業中", "隣家の手伝い"];
 
 function roleSteps(life) {
   return ROLE_LADDERS[life.occupation] ?? [];
@@ -1778,12 +1779,10 @@ function advancePregnancy(life, random, months) {
     }
   }
   if (life.age >= (life.tryingUntil ?? Infinity)) {
-    life.childPlan = "later";
-    life.nextChildAskAt = life.age + childRetryDelay(random);
-    life.tryingSince = null;
-    life.tryingUntil = null;
-    life.tryingMotherAge = null;
-    appendEvent(life, "この一年は子を授からなかった。しばらく後に、改めて話し合うことにした。", "life", "家族", `conception-not-this-year-${Math.floor(life.age)}`);
+    life.tryingSince = life.age;
+    life.tryingUntil = life.age + 1;
+    life.tryingMotherAge = mother.humanAge;
+    appendEvent(life, "この年は子供を授からなかった。来年も引き続き子供を授かるために試みることにした。", "life", "家族", `conception-not-this-year-${Math.floor(life.age)}`);
   }
 }
 
